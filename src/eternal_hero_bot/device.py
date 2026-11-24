@@ -1,0 +1,129 @@
+"""Device access: an adb wrapper for BlueStacks plus the joystick helper.
+
+The bot only talks to the device through the small :class:`Device` protocol, so
+tests can substitute a fake that serves synthetic screenshots.
+"""
+
+from __future__ import annotations
+
+import io
+import math
+import subprocess
+from typing import Protocol
+
+import numpy as np
+from PIL import Image
+
+from eternal_hero_bot.arrays import RGBImage
+from eternal_hero_bot.config import SCREEN, DeviceConfig, ScreenGeometry
+
+
+class Device(Protocol):
+    """Minimal interface the bot needs from an Android device."""
+
+    def screenshot(self) -> RGBImage:
+        """Capture the screen.
+
+        Returns:
+            The screen as an ``H x W x 3`` integer RGB array.
+        """
+        ...
+
+    def tap(self, x: int, y: int) -> None:
+        """Tap the screen at ``(x, y)``.
+
+        Args:
+            x: Screen x coordinate.
+            y: Screen y coordinate.
+        """
+        ...
+
+    def swipe(self, x1: int, y1: int, x2: int, y2: int, ms: int) -> None:
+        """Swipe from ``(x1, y1)`` to ``(x2, y2)`` over ``ms`` milliseconds.
+
+        Args:
+            x1: Start x.
+            y1: Start y.
+            x2: End x.
+            y2: End y.
+            ms: Duration in milliseconds.
+        """
+        ...
+
+
+class AdbDevice:
+    """A :class:`Device` backed by an adb executable (BlueStacks' ``HD-Adb.exe``)."""
+
+    def __init__(self, config: DeviceConfig | None = None) -> None:
+        """Create the device wrapper.
+
+        Args:
+            config: adb settings; defaults to :meth:`DeviceConfig.from_env`.
+        """
+        self.config = config or DeviceConfig.from_env()
+
+    def adb(self, *args: str, capture: bool = False) -> bytes:
+        """Run an adb command against the configured device.
+
+        Args:
+            *args: adb arguments after ``-s <serial>``.
+            capture: Return stdout when true, otherwise an empty bytes object.
+
+        Returns:
+            The command's stdout if ``capture`` is set, else ``b""``.
+
+        Raises:
+            FileNotFoundError: If the adb executable does not exist.
+            subprocess.TimeoutExpired: If the command exceeds the configured timeout.
+        """
+        cmd = [self.config.adb, "-s", self.config.serial, *args]
+        result = subprocess.run(cmd, capture_output=True, timeout=self.config.timeout, check=False)
+        return result.stdout if capture else b""
+
+    def screenshot(self) -> RGBImage:
+        """Capture the screen via ``screencap``.
+
+        Returns:
+            The screen as an ``H x W x 3`` int64 RGB array.
+        """
+        png = self.adb("exec-out", "screencap", "-p", capture=True)
+        return np.asarray(Image.open(io.BytesIO(png)).convert("RGB")).astype(np.int64)
+
+    def tap(self, x: int, y: int) -> None:
+        """Tap the screen at ``(x, y)``.
+
+        Args:
+            x: Screen x coordinate.
+            y: Screen y coordinate.
+        """
+        self.adb("shell", "input", "tap", str(x), str(y))
+
+    def swipe(self, x1: int, y1: int, x2: int, y2: int, ms: int) -> None:
+        """Swipe from ``(x1, y1)`` to ``(x2, y2)`` over ``ms`` milliseconds.
+
+        Args:
+            x1: Start x.
+            y1: Start y.
+            x2: End x.
+            y2: End y.
+            ms: Duration in milliseconds.
+        """
+        self.adb("shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(ms))
+
+
+def push_joystick(
+    device: Device, dx: float, dy: float, ms: int, screen: ScreenGeometry = SCREEN
+) -> None:
+    """Hold the virtual joystick in direction ``(dx, dy)`` for ``ms`` milliseconds.
+
+    Args:
+        device: Device to send the swipe to.
+        dx: Direction x component (any magnitude).
+        dy: Direction y component (any magnitude).
+        ms: Hold duration in milliseconds.
+        screen: Screen geometry holding the joystick position and push radius.
+    """
+    length = math.hypot(dx, dy) or 1
+    tx = screen.joy_x + dx / length * screen.joy_r
+    ty = screen.joy_y + dy / length * screen.joy_r
+    device.swipe(screen.joy_x, screen.joy_y, int(tx), int(ty), ms)
