@@ -1,6 +1,6 @@
 """Deterministic fake device: a seeded synthetic world rendered as hero-centred minimaps.
 
-`FakeWorld` implements the :class:`~eternal_hero_bot.device.Device` protocol without any
+`FakeWorld` implements the :class:`~eternal_hero_bot.device.base.Device` protocol without any
 emulator. It backs a seeded synthetic world bitmap (walkable ground, wall cells,
 handle-coloured nodes) and renders a 960x1080 frame whose minimap square shows the world
 around the hero. Joystick swipes move the hero; every device call and sleep is appended to

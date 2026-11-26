@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from eternal_hero_bot.action.navigation import bfs, nearest_node
 from eternal_hero_bot.core.arrays import FloatArray, Mask, Offset, Point, RGBImage
 from eternal_hero_bot.core.config import (
     PATHING,
@@ -19,10 +20,9 @@ from eternal_hero_bot.core.config import (
     ScreenGeometry,
     StuckConfig,
 )
-from eternal_hero_bot.device import Device, push_joystick
-from eternal_hero_bot.pathing import bfs, nearest_node
-from eternal_hero_bot.tracker import Tracker
-from eternal_hero_bot.vision import find_nodes, is_dead, walkable_mask
+from eternal_hero_bot.device.base import Device, push_joystick
+from eternal_hero_bot.perception.tracker import Tracker
+from eternal_hero_bot.perception.vision import find_nodes, is_dead, walkable_mask
 
 logger = logging.getLogger(__name__)
 

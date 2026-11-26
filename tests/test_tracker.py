@@ -6,7 +6,7 @@ import numpy as np
 
 from eternal_hero_bot.core.arrays import FloatArray
 from eternal_hero_bot.core.config import SCREEN
-from eternal_hero_bot.tracker import Tracker
+from eternal_hero_bot.perception.tracker import Tracker
 
 N = SCREEN.mm_size
 

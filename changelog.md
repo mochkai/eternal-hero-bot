@@ -20,6 +20,17 @@
   `tests/test_layers.py` to enforce the spec layer import allow-list with `ast` for packages
   present at this step.
 
+- Step 3 of the architecture refactor (§11): created `eternal_hero_bot.perception` with moved
+  `vision.py` and `tracker.py` (behaviour unchanged, numpy code verbatim); created
+  `eternal_hero_bot.action` with `navigation.py` moved verbatim from `pathing.py`
+  (`bfs`, `nearest_node`, `NEIGHBOURS`); split `device.py` into `eternal_hero_bot.device`
+  package: `base.py` (`Device` protocol, signature unchanged, + `push_joystick`) and
+  `adb.py` (`AdbDevice`, unchanged). `Bot` still drives. Imports in `bot.py`, `cli.py`,
+  `debug.py`, `tests/sim.py` and tests updated; `tests/test_pathing.py` renamed
+  `tests/test_navigation.py`; no compatibility shims. `tests/test_layers.py` updated for the
+  new packages (`device`, `perception`, `action`) and allows numpy/PIL where required by
+  `AdbDevice`, `vision`, `tracker`, `navigation`.
+
 ## 0.2.0 - 2026-11-24
 
 ### Changed

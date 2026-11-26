@@ -19,13 +19,20 @@ STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 # Spec §3 allow-list. Values are allowed top-level import targets: stdlib is always
 # allowed; "numpy" allows numpy/numpy.*; "eternal_hero_bot.<pkg>" allows that package.
 # "ANY_INTERNAL" means any eternal_hero_bot package (used for runtime/cli/debug).
+# Besides numpy, "device" may use PIL for PNG decoding (spec §2.2: Pillow stays for I/O;
+# §5.1: AdbDevice is unchanged); no layer may import a higher/sibling project layer.
 LAYER_ALLOW: dict[str, set[str]] = {
     "core": {"numpy"},
-    "device": {"eternal_hero_bot.core"},
-    "perception": {"eternal_hero_bot.core", "eternal_hero_bot.assets_lib"},
+    "device": {"eternal_hero_bot.core", "numpy", "PIL"},
+    "perception": {"eternal_hero_bot.core", "eternal_hero_bot.assets_lib", "numpy"},
     "brain": {"eternal_hero_bot.core"},
     "skills": {"eternal_hero_bot.core", "eternal_hero_bot.action.navigation"},
-    "action": {"eternal_hero_bot.core", "eternal_hero_bot.assets_lib", "eternal_hero_bot.device"},
+    "action": {
+        "eternal_hero_bot.core",
+        "eternal_hero_bot.assets_lib",
+        "eternal_hero_bot.device",
+        "numpy",
+    },
     "recording": {"eternal_hero_bot.core"},
     "runtime": {"ANY_INTERNAL"},
     "cli": {"ANY_INTERNAL"},
@@ -127,8 +134,8 @@ def _is_allowed(module: str, layer: str) -> bool:
     if module == "numpy" or module.startswith("numpy."):
         return "numpy" in allowed
     if top != "eternal_hero_bot":
-        # Third-party deps are not in the spec allow-list; reject by default.
-        return False
+        # Third-party deps are rejected unless explicitly in the allow-list.
+        return top in allowed or module in allowed
     for rule in allowed:
         if rule in {"numpy", "ANY_INTERNAL"}:
             continue
@@ -139,10 +146,20 @@ def _is_allowed(module: str, layer: str) -> bool:
 
 
 def test_layer_packages_present() -> None:
-    """Step 2 requires the core package to exist."""
+    """Step 2 requires `core/`; step 3 requires `device/`, `perception/`, `action/`."""
     assert (SRC_ROOT / "core").is_dir()
     for name in ("arrays.py", "config.py", "state.py", "actions.py", "geometry.py"):
         assert (SRC_ROOT / "core" / name).is_file(), name
+    # Step 3 (spec §3, §11): `AdbDevice` -> device/, vision/tracker -> perception/,
+    # pathing -> action/navigation.py. `Device` protocol lives in device/base.py.
+    assert (SRC_ROOT / "device").is_dir()
+    for name in ("base.py", "adb.py"):
+        assert (SRC_ROOT / "device" / name).is_file(), name
+    assert (SRC_ROOT / "perception").is_dir()
+    for name in ("vision.py", "tracker.py"):
+        assert (SRC_ROOT / "perception" / name).is_file(), name
+    assert (SRC_ROOT / "action").is_dir()
+    assert (SRC_ROOT / "action" / "navigation.py").is_file()
 
 
 def test_layer_boundaries() -> None:

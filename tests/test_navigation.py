@@ -1,11 +1,11 @@
-"""Tests for BFS path planning."""
+"""Tests for BFS path planning over the walkable mask."""
 
 from __future__ import annotations
 
 import numpy as np
 
+from eternal_hero_bot.action.navigation import bfs, nearest_node
 from eternal_hero_bot.core.config import PATHING, SCREEN
-from eternal_hero_bot.pathing import bfs, nearest_node
 
 R = SCREEN.mm_r
 N = 2 * R

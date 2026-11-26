@@ -76,10 +76,14 @@ src/eternal_hero_bot/
     state.py     immutable game-state snapshots (perception output)
     actions.py   action union skills emit; controller executes
     geometry.py  Box and reference/frame scaling helpers
-  device.py      adb wrapper for BlueStacks and the joystick helper
-  vision.py      minimap crop, walkable mask, node and death-dialog detection
-  pathing.py     breadth-first path search over the walkable mask
-  tracker.py     hero position tracking by phase correlation
+  device/
+    base.py      Device protocol and push_joystick joystick helper
+    adb.py       AdbDevice: adb wrapper for BlueStacks
+  perception/
+    vision.py    minimap crop, walkable mask, node and death-dialog detection
+    tracker.py   hero position tracking by phase correlation
+  action/
+    navigation.py  breadth-first path search over the walkable mask
   bot.py         the gather loop: planning, wall learning, revive
   debug.py       annotated detect.png rendering
   cli.py         the ehbot command (run, detect)
