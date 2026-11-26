@@ -46,6 +46,16 @@ WALL_STAMP_R = 2
 """Half-size of the square stamped into world memory per blocked path pixel."""
 FALLBACK_STEPS = 20
 """Number of points on the straight-line fallback path."""
+BLOCKED_FRACTION = 0.35
+"""A push that covers less than this share of its expected distance hit something."""
+BLOCKED_MIN_EXPECTED_PX = 6.0
+"""Pushes expected to move less than this are too short to judge (tracker noise)."""
+BLOCKED_STAMP_DEPTH: tuple[int, ...] = (3, 4, 5)
+"""Distances ahead of the hero (crop pixels) stamped as wall after a blocked push."""
+BLOCKED_STAMP_HALF_WIDTH = 8
+"""Half-width, across the heading, of the wall stamped after a blocked push."""
+PARTIAL_MIN_GAIN_PX = 3.0
+"""A partial path must end at least this much closer to the target than the hero is."""
 
 
 def open_start(walk: Mask, centre: int = SCREEN.mm_r) -> None:
@@ -63,6 +73,8 @@ def bfs(
     targets: list[Offset],
     centre: int = SCREEN.mm_r,
     goal_r: int = PATHING.goal_r,
+    *,
+    partial: bool = False,
 ) -> list[Point] | None:
     """Shortest 8-connected path from the hero to the nearest reachable target.
 
@@ -74,10 +86,14 @@ def bfs(
         targets: Target offsets relative to the hero.
         centre: Hero position on both axes of the crop (the minimap radius).
         goal_r: Radius of the walkable goal disc around each target.
+        partial: When no target is reachable, return the path to the reachable
+            cell closest to any target instead (so the hero works its way around
+            walls toward nodes whose ground route is not visible yet).
 
     Returns:
         The path as ``[(x, y), ...]`` in minimap-crop pixels from the hero to the
-        goal, or None if no target is reachable.
+        goal, or None if no target is reachable (and, with ``partial``, no reachable
+        cell is at least ``PARTIAL_MIN_GAIN_PX`` closer to a target than the hero).
     """
     walk = walk.copy()
     n = walk.shape[0]
@@ -93,19 +109,91 @@ def bfs(
     while q:
         x, y = q.popleft()
         if goal[y, x]:
-            # Walk the predecessor chain back to the start
-            path: list[Point] = []
-            node: Point | None = (x, y)
-            while node is not None:
-                path.append(node)
-                node = prev[node]
-            return path[::-1]
+            return _unwind(prev, (x, y))
         for ddx, ddy in NEIGHBOURS:
             nx, ny = x + ddx, y + ddy
             if 0 <= nx < n and 0 <= ny < n and walk[ny, nx] and (nx, ny) not in prev:
                 prev[(nx, ny)] = (x, y)
                 q.append((nx, ny))
-    return None
+    if not partial or not targets:
+        return None
+
+    def gap(cell: Point) -> float:
+        """Distance from ``cell`` to the closest target centre."""
+        return min(math.hypot(centre + dx - cell[0], centre + dy - cell[1]) for dx, dy in targets)
+
+    # BFS visits cells in path-length order, so ``min`` keeps the shortest route on ties
+    best = min(prev, key=gap)
+    if gap(best) > gap(start) - PARTIAL_MIN_GAIN_PX:
+        return None
+    return _unwind(prev, best)
+
+
+def _unwind(prev: dict[Point, Point | None], end: Point) -> list[Point]:
+    """Walk a BFS predecessor chain back from ``end`` to the start.
+
+    Args:
+        prev: Predecessor of every visited cell (``None`` for the start).
+        end: Cell to unwind from.
+
+    Returns:
+        The path from the start to ``end``, inclusive.
+    """
+    path: list[Point] = []
+    node: Point | None = end
+    while node is not None:
+        path.append(node)
+        node = prev[node]
+    return path[::-1]
+
+
+def line_clear(walk: Mask, a: Point, b: Point) -> bool:
+    """Whether the straight segment from ``a`` to ``b`` stays on walkable pixels.
+
+    Args:
+        walk: Walkable mask in crop pixels.
+        a: Segment start ``(x, y)``.
+        b: Segment end ``(x, y)``.
+
+    Returns:
+        True if every pixel sampled along the segment is walkable.
+    """
+    steps = max(abs(b[0] - a[0]), abs(b[1] - a[1]))
+    for k in range(1, steps + 1):
+        x = round(a[0] + (b[0] - a[0]) * k / steps)
+        y = round(a[1] + (b[1] - a[1]) * k / steps)
+        if not walk[y, x]:
+            return False
+    return True
+
+
+def aim_index(walk: Mask, path: list[Point], lookahead: int) -> int:
+    """Index of the path point to steer at: the lookahead point, unless that cuts a corner.
+
+    Steering straight at ``path[lookahead]`` drives the hero into a wall when the path
+    bends around a corner. This picks the farthest point up to ``lookahead`` that the
+    hero can see in a straight line, so the push follows the path around obstacles.
+    In open ground the result is exactly ``min(lookahead, len(path) - 1)``.
+
+    Args:
+        walk: Walkable mask the path was planned on.
+        path: Planned path in crop pixels, starting at the hero.
+        lookahead: Preferred steering distance along the path.
+
+    Returns:
+        The index into ``path`` to aim at (at least 1 when the path has two points).
+    """
+    far = min(lookahead, len(path) - 1)
+    # Path cells and their 1px corridor count as clear: that covers the goal disc and
+    # diagonal squeezes between wall pixels, while a real corner cut strays further
+    los = walk.copy()
+    n = walk.shape[0]
+    for x, y in path:
+        los[max(0, y - 1) : min(n, y + 2), max(0, x - 1) : min(n, x + 2)] = True
+    for i in range(far, 1, -1):
+        if line_clear(los, path[0], path[i]):
+            return i
+    return min(1, far)
 
 
 def nearest_node(nodes: list[Offset], x: int, y: int, centre: int = SCREEN.mm_r) -> Offset:
@@ -216,16 +304,59 @@ class Navigator:
         self.stuck = stuck
         self.memory = WorldMemory()
         self.hist: list[FloatArray] = []
+        self._last_push: tuple[FloatArray, float, float, float] | None = None
+        self._blocked_streak = 0
+        self._prev_walk: tuple[Mask, FloatArray] | None = None
+        n, pr = screen.mm_size, screen.player_r
+        yy, xx = np.mgrid[0:n, 0:n]
+        self._arrow: Mask = (xx - screen.mm_r) ** 2 + (yy - screen.mm_r) ** 2 < pr**2
 
     def reset(self) -> None:
-        """Clear world memory. Stuck history is kept (parity)."""
+        """Clear world memory, the last push and the remembered mask. Stuck history is kept."""
         self.memory.clear()
+        self._last_push = None
+        self._blocked_streak = 0
+        self._prev_walk = None
+
+    def _fill_hidden(self, walk: Mask, pos: FloatArray) -> Mask:
+        """Fill the ground hidden under the hero arrow from the previous frame's mask.
+
+        The vision layer marks the whole arrow disc walkable because the arrow covers
+        the ground, which hides walls the hero is standing next to; paths then run
+        straight into them. The previous (already filled) mask, shifted by the hero's
+        movement, still shows what lies under the arrow now.
+
+        Args:
+            walk: Walkable mask of this frame (crop pixels).
+            pos: Hero world position this frame.
+
+        Returns:
+            ``walk`` with the arrow disc taken from the previous frame where known.
+        """
+        prev, self._prev_walk = self._prev_walk, None
+        out = walk
+        if prev is not None:
+            prev_walk, prev_pos = prev
+            sx, sy = (round(float(v)) for v in pos - prev_pos)
+            n = walk.shape[0]
+            if math.hypot(sx, sy) <= self.stuck.max_step_px:
+                # Pixel (x, y) now was pixel (x + sx, y + sy) last frame; unseen = walkable
+                shifted = np.ones_like(walk)
+                ys, ye = max(0, -sy), min(n, n - sy)
+                xs, xe = max(0, -sx), min(n, n - sx)
+                shifted[ys:ye, xs:xe] = prev_walk[ys + sy : ye + sy, xs + sx : xe + sx]
+                out = walk.copy()
+                out[self._arrow] = shifted[self._arrow]
+        self._prev_walk = (out.copy(), pos.copy())
+        return out
 
     def step_toward(self, view: MinimapView, targets: list[Offset], now: float) -> Move | None:
         """Plan and return the next move toward targets, or explore if none.
 
-        This is the body of today's ``Bot.step`` after the death check, kept in the
-        same order for gather parity.
+        Each frame: judge whether the last push was blocked (learning a wall at once),
+        fill the ground hidden under the hero arrow from the previous frame, plan with
+        BFS (partial toward the node when no full route is visible), then steer at the
+        farthest path point in line of sight.
 
         Args:
             view: Current minimap view (walkable mask and hero position).
@@ -240,6 +371,7 @@ class Navigator:
         pos = np.array(view.hero_pos, dtype=np.float64)
         px, py = float(pos[0]), float(pos[1])
         self.memory.expire(now)
+        self._check_last_push(pos, now)
 
         blocked = self.memory.blocked_view(pos, self.screen)
         skip_rel = self.memory.skip_offsets(pos)
@@ -249,32 +381,37 @@ class Navigator:
             for dx, dy in targets
             if not any(math.hypot(dx - sx, dy - sy) < self.stuck.skip_radius for sx, sy in skip_rel)
         ]
-        walk = np.array(view.walk, copy=True) & ~blocked
+        walk = self._fill_hidden(np.array(view.walk, dtype=bool), pos) & ~blocked
         open_start(walk, r)
-        path = bfs(walk, nodes, r, self.pathing.goal_r) if nodes else None
+        # Partial: with no visible ground route, work around walls toward the node anyway
+        path = bfs(walk, nodes, r, self.pathing.goal_r, partial=True) if nodes else None
+
+        if nodes and path is None:
+            # Nothing reachable gets closer: head straight for the nearest node; walls get learned
+            tx, ty = min(nodes, key=lambda p: math.hypot(*p))
+            path = [(r, r)] + [
+                (int(r + tx * t / FALLBACK_STEPS), int(r + ty * t / FALLBACK_STEPS))
+                for t in range(1, FALLBACK_STEPS + 1)
+            ]
 
         stuck = self._is_stuck(pos)
         if path is not None and stuck:
             self._handle_stuck(nodes, path, px, py, now)
             return None  # replan on a fresh frame
 
-        if nodes and path is None:
-            # No ground path found: head straight for the nearest node; walls get learned
-            tx, ty = min(nodes, key=lambda p: math.hypot(*p))
-            path = [(r, r)] + [
-                (int(r + tx * t / FALLBACK_STEPS), int(r + ty * t / FALLBACK_STEPS))
-                for t in range(1, FALLBACK_STEPS + 1)
-            ]
         if not nodes or path is None:
             logger.info("no nodes in view; exploring")
             return self.explore(walk)
 
         lookahead = self.pathing.lookahead
         gx, gy = path[-1][0] - r, path[-1][1] - r
-        wx, wy = path[min(lookahead, len(path) - 1)]
+        aim = aim_index(walk, path, lookahead)
+        wx, wy = path[aim]
         dx, dy = wx - r, wy - r
-        seg = min(len(path), lookahead)
+        # Around a corner, push only as far as the visible point so the next frame turns
+        seg = min(len(path), lookahead) if aim == min(lookahead, len(path) - 1) else aim
         ms = int(min(MAX_PUSH_MS, max(MIN_PUSH_MS, seg / self.pathing.px_per_sec * 1000)))
+        self._remember_push(pos, dx, dy, ms)
         logger.info(
             "pos (%+.0f,%+.0f) node (%+d,%+d) path %d -> step (%+d,%+d) %dms walls %d",
             px,
@@ -311,6 +448,66 @@ class Navigator:
         best = max(range(8), key=openness)
         ang = best * math.pi / 4
         return Move(dx=math.cos(ang), dy=math.sin(ang), ms=EXPLORE_MS)
+
+    def _remember_push(self, pos: FloatArray, dx: float, dy: float, ms: int) -> None:
+        """Record a path-following push so the next frame can tell if it was blocked.
+
+        Args:
+            pos: Hero world position when the push was planned.
+            dx: Push direction x (any magnitude).
+            dy: Push direction y (any magnitude).
+            ms: Push duration in milliseconds.
+        """
+        length = math.hypot(dx, dy)
+        if length == 0:
+            self._last_push = None  # standing on the node: nothing to judge
+            return
+        expected = ms / 1000 * self.pathing.px_per_sec
+        self._last_push = (pos.copy(), dx / length, dy / length, expected)
+
+    def _check_last_push(self, pos: FloatArray, now: float) -> None:
+        """Learn a wall straight ahead as soon as one push fails to make progress.
+
+        Net-movement stuck detection needs several still frames; a single push that
+        moves the hero far less than expected along its heading already shows the way
+        is blocked (typically an invisible wall), so a short wall is stamped across
+        the heading and the caller replans this same frame.
+
+        Args:
+            pos: Current hero world position.
+            now: Current time in seconds.
+        """
+        last, self._last_push = self._last_push, None
+        if last is None:
+            return
+        start, ux, uy, expected = last
+        if expected < BLOCKED_MIN_EXPECTED_PX:
+            return
+        progress = float((pos[0] - start[0]) * ux + (pos[1] - start[1]) * uy)
+        if progress >= BLOCKED_FRACTION * expected:
+            self._blocked_streak = 0
+            return
+        self._blocked_streak += 1
+        expiry = now + self.stuck.block_seconds
+        w = BLOCKED_STAMP_HALF_WIDTH
+        hx, hy = float(pos[0]), float(pos[1])
+        for d in BLOCKED_STAMP_DEPTH:
+            for s in range(-w, w + 1):
+                # (-uy, ux) is the heading turned 90 degrees: the wall runs across it
+                cell = (round(hx + ux * d - uy * s), round(hy + uy * d + ux * s))
+                self.memory.walls[cell] = expiry
+        if self._blocked_streak == 1:
+            # The wall was handled; don't let net-movement stuck detection count it as a
+            # detour. Repeated blocks with no progress in between fall through to it, so a
+            # hero that cannot move at all still ends up skipping the node area.
+            self.hist.clear()
+        logger.info(
+            "push blocked (%.1f of %.1fpx toward %+.2f,%+.2f); learned wall, replanning",
+            progress,
+            expected,
+            ux,
+            uy,
+        )
 
     def _is_stuck(self, pos: FloatArray) -> bool:
         """Record the current position and test for little *net* recent movement.
