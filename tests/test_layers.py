@@ -31,6 +31,7 @@ LAYER_ALLOW: dict[str, set[str]] = {
         "eternal_hero_bot.core",
         "eternal_hero_bot.assets_lib",
         "eternal_hero_bot.device",
+        "eternal_hero_bot.perception",
         "numpy",
     },
     "recording": {"eternal_hero_bot.core"},
@@ -148,8 +149,9 @@ def _is_allowed(module: str, layer: str) -> bool:
 def test_layer_packages_present() -> None:
     """Step 2 requires `core/`; step 3 requires `device/`, `perception/`, `action/`."""
     assert (SRC_ROOT / "core").is_dir()
-    for name in ("arrays.py", "config.py", "state.py", "actions.py", "geometry.py"):
+    for name in ("arrays.py", "config.py", "state.py", "actions.py", "geometry.py", "outcomes.py"):
         assert (SRC_ROOT / "core" / name).is_file(), name
+    # Step 2 (spec §3, §11): `core/` shared vocabulary; step 5 adds the skill outcomes.
     # Step 3 (spec §3, §11): `AdbDevice` -> device/, vision/tracker -> perception/,
     # pathing -> action/navigation.py. `Device` protocol lives in device/base.py.
     assert (SRC_ROOT / "device").is_dir()
@@ -160,6 +162,10 @@ def test_layer_packages_present() -> None:
         assert (SRC_ROOT / "perception" / name).is_file(), name
     assert (SRC_ROOT / "action").is_dir()
     assert (SRC_ROOT / "action" / "navigation.py").is_file()
+    # Step 5 (spec §11): skill framework, registry, gather/revive skills, runtime.
+    assert (SRC_ROOT / "skills").is_dir()
+    for name in ("__init__.py", "base.py", "gather.py", "registry.py", "revive.py"):
+        assert (SRC_ROOT / "skills" / name).is_file(), name
 
 
 def test_layer_boundaries() -> None:

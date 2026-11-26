@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from eternal_hero_bot.core.actions import Move
-from eternal_hero_bot.core.arrays import FloatArray, Mask, Offset, Point
+from eternal_hero_bot.core.arrays import FloatArray, Mask, Offset, Point, RGBImage
 from eternal_hero_bot.core.config import (
     PATHING,
     SCREEN,
@@ -20,6 +20,7 @@ from eternal_hero_bot.core.config import (
     StuckConfig,
 )
 from eternal_hero_bot.core.state import MinimapView
+from eternal_hero_bot.perception.vision import find_nodes, walkable_mask
 
 logger = logging.getLogger(__name__)
 
@@ -362,3 +363,36 @@ class Navigator:
                         mem.walls[(int(x + ddx - r + px), int(y + ddy - r + py))] = expiry
             logger.info("blocked ahead (area detour %d); replanning", mem.detours[key])
         self.hist.clear()
+
+
+def plan(
+    img: RGBImage,
+    skip: list[Offset],
+    blocked: Mask | None = None,
+    screen: ScreenGeometry = SCREEN,
+    pathing: PathingConfig = PATHING,
+) -> tuple[list[Offset], Mask, list[Point] | None]:
+    """Find nodes, drop skipped ones, and path to the nearest reachable one.
+
+    Args:
+        img: Full-screen RGB screenshot.
+        skip: Hero-relative offsets of nodes to ignore.
+        blocked: Extra wall mask learned from places the hero got stuck.
+        screen: Screen geometry.
+        pathing: Pathing parameters.
+
+    Returns:
+        ``(nodes, walk, path)``: remaining node offsets, the walkable mask used and the BFS
+        path (None if no node is reachable or none were found).
+    """
+    nodes = [
+        (dx, dy)
+        for dx, dy, _ in find_nodes(img, screen)
+        if not any(math.hypot(dx - sx, dy - sy) < pathing.skip_match_r for sx, sy in skip)
+    ]
+    walk = walkable_mask(img, screen, wall_margin=pathing.wall_margin)
+    if blocked is not None:
+        walk &= ~blocked
+        open_start(walk, screen.mm_r)
+    path = bfs(walk, nodes, screen.mm_r, pathing.goal_r) if nodes else None
+    return nodes, walk, path

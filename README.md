@@ -54,7 +54,11 @@ Game setup the bot expects:
 5. **Stuck handling**: little net movement over `StuckConfig.stuck_steps` steps marks the stretch
    ahead as an invisible wall (remembered `block_seconds`); after `max_detours` failures the
    node's area is skipped for `skip_seconds`.
-6. **Death**: the Revive button is tapped automatically.
+6. **Death**: the `revive` skill (forced by the brain's revive rule) taps the Revive button and waits.
+
+The main loop is the `Runtime`: it captures a frame, perceives a `GameState`, asks the brain
+(which currently picks between a minimal fixed `revive`/`gather` policy and, later, rules) and
+lets the matching skill produce actions that the controller executes against the device.
 
 ## Development
 
@@ -75,6 +79,7 @@ src/eternal_hero_bot/
     config.py    tuned constants as frozen dataclasses
     state.py     immutable game-state snapshots (perception output)
     actions.py   action union skills emit; controller executes
+    outcomes.py  SkillStatus, StepResult and Decision shared by brain/skills/recording
     geometry.py  Box and reference/frame scaling helpers
   device/
     base.py      Device protocol and push_joystick joystick helper
@@ -84,7 +89,12 @@ src/eternal_hero_bot/
     tracker.py   hero position tracking by phase correlation
   action/
     navigation.py  breadth-first path search over the walkable mask
-  bot.py         the gather loop: planning, wall learning, revive
+  skills/
+    base.py      Skill protocol, SkillContext and the step vocabulary
+    registry.py  @register decorator and build_skills(config)
+    gather.py    GatherSkill (navigate to the nearest node)
+    revive.py    ReviveSkill (forced death flow)
+  runtime.py     Runtime main loop: perceive -> brain -> skill -> action
   debug.py       annotated detect.png rendering
   cli.py         the ehbot command (run, detect)
   __main__.py    enables python -m eternal_hero_bot
