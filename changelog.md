@@ -22,6 +22,12 @@
   The invisible-wall trace now walks round the barrier and reaches the node.
 
 ### Added
+- Per-step processing-time stats (#19): `Runtime.tick` times the `capture`, `perceive`,
+  `decide`, `skill` (planning/pathfinding) and `act` phases plus `total` with
+  `time.perf_counter` (injected clock untouched, golden traces unchanged). Each tick logs a
+  DEBUG line and every `timing_log_every` ticks (default 100) an INFO per-phase mean/max
+  summary, both with structured `extra` fields; the last tick's `StepTiming` is exposed as
+  `Runtime.last_timing`.
 - `tests/test_nav_scenarios.py` and new `FakeWorld` scenarios (`wall_detour`, `u_pocket`,
   `wide_wall`) with `ticks_to_reach`. Visible-wall cases now take 11 / 10 / 13 ticks to reach the
   node (24 / 27 / 29 before) and the long invisible wall 40 (never before). Over 12 open-field seeds
