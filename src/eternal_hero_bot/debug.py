@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 from eternal_hero_bot.core.arrays import Mask, Offset, Point, RGBImage
 from eternal_hero_bot.core.config import SCREEN, ScreenGeometry
-from eternal_hero_bot.vision import minimap
+from eternal_hero_bot.perception.vision import minimap
 
 SCALE = 3
 """Upscale factor for the debug image."""

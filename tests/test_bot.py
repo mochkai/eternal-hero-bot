@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import numpy as np
 
+from eternal_hero_bot.action.navigation import bfs
 from eternal_hero_bot.bot import Bot, WorldMemory
 from eternal_hero_bot.core.arrays import RGBImage
 from eternal_hero_bot.core.config import SCREEN, STUCK
-from eternal_hero_bot.device import push_joystick
-from eternal_hero_bot.pathing import bfs
-from eternal_hero_bot.vision import find_nodes
+from eternal_hero_bot.device.base import push_joystick
+from eternal_hero_bot.perception.vision import find_nodes
 from tests.helpers import HANDLE_RGB, blank_screen, paint
 
 
 class FakeDevice:
-    """A :class:`~eternal_hero_bot.device.Device` serving a fixed screen and recording input."""
+    """A :class:`~eternal_hero_bot.device.base.Device` serving a fixed screen, recording input."""
 
     def __init__(self, img: RGBImage) -> None:
         """Create the fake.

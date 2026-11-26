@@ -9,7 +9,8 @@ from pathlib import Path
 
 from eternal_hero_bot.bot import Bot, plan
 from eternal_hero_bot.debug import render_detect
-from eternal_hero_bot.device import AdbDevice, Device
+from eternal_hero_bot.device.adb import AdbDevice
+from eternal_hero_bot.device.base import Device
 
 logger = logging.getLogger(__name__)
 
