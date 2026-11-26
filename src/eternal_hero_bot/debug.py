@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image, ImageDraw
 
-from eternal_hero_bot.arrays import Mask, Offset, Point, RGBImage
-from eternal_hero_bot.config import SCREEN, ScreenGeometry
+from eternal_hero_bot.core.arrays import Mask, Offset, Point, RGBImage
+from eternal_hero_bot.core.config import SCREEN, ScreenGeometry
 from eternal_hero_bot.vision import minimap
 
 SCALE = 3

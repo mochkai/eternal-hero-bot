@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from eternal_hero_bot.arrays import RGBImage
-from eternal_hero_bot.config import SCREEN
+from eternal_hero_bot.core.arrays import RGBImage
+from eternal_hero_bot.core.config import SCREEN
 from eternal_hero_bot.vision import find_nodes, icon_center, is_dead, minimap, walkable_mask
 from tests.helpers import HANDLE_RGB, KEY_RGB, METAL_RGB, WALL_RGB, paint
 

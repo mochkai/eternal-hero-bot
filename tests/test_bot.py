@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from eternal_hero_bot.arrays import RGBImage
 from eternal_hero_bot.bot import Bot, WorldMemory
-from eternal_hero_bot.config import SCREEN, STUCK
+from eternal_hero_bot.core.arrays import RGBImage
+from eternal_hero_bot.core.config import SCREEN, STUCK
 from eternal_hero_bot.device import push_joystick
 from eternal_hero_bot.pathing import bfs
 from eternal_hero_bot.vision import find_nodes

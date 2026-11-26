@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 
-from eternal_hero_bot.arrays import FloatArray
-from eternal_hero_bot.config import SCREEN, STUCK, ScreenGeometry
+from eternal_hero_bot.core.arrays import FloatArray
+from eternal_hero_bot.core.config import SCREEN, STUCK, ScreenGeometry
 
 
 class Tracker:

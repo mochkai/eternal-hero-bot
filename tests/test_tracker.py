@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from eternal_hero_bot.arrays import FloatArray
-from eternal_hero_bot.config import SCREEN
+from eternal_hero_bot.core.arrays import FloatArray
+from eternal_hero_bot.core.config import SCREEN
 from eternal_hero_bot.tracker import Tracker
 
 N = SCREEN.mm_size

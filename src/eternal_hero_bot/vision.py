@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from eternal_hero_bot.arrays import Mask, RGBImage
-from eternal_hero_bot.config import COLOURS, PATHING, SCREEN, Colours, ScreenGeometry
+from eternal_hero_bot.core.arrays import Mask, RGBImage
+from eternal_hero_bot.core.config import COLOURS, PATHING, SCREEN, Colours, ScreenGeometry
 
 ICON_R = 11
 """Half-size of the window searched for a node icon's metal around its handle."""

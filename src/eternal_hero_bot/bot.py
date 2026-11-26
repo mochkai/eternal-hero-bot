@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from eternal_hero_bot.arrays import FloatArray, Mask, Offset, Point, RGBImage
-from eternal_hero_bot.config import (
+from eternal_hero_bot.core.arrays import FloatArray, Mask, Offset, Point, RGBImage
+from eternal_hero_bot.core.config import (
     PATHING,
     SCREEN,
     STUCK,

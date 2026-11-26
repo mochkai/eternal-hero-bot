@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from eternal_hero_bot.arrays import RGBImage
-from eternal_hero_bot.config import COLOURS, SCREEN
+from eternal_hero_bot.core.arrays import RGBImage
+from eternal_hero_bot.core.config import COLOURS, SCREEN
 
 HEIGHT, WIDTH = 1080, 960
 HANDLE_RGB = (140, 87, 64)

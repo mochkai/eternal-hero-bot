@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from eternal_hero_bot.arrays import Point, RGBImage
-from eternal_hero_bot.config import COLOURS, PATHING, SCREEN, ScreenGeometry
+from eternal_hero_bot.core.arrays import Point, RGBImage
+from eternal_hero_bot.core.config import COLOURS, PATHING, SCREEN, ScreenGeometry
 
 HEIGHT, WIDTH = 1080, 960
 """Synthetic full-screen frame size (BlueStacks 960x1080 portrait)."""

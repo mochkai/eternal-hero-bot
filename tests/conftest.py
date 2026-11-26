@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from eternal_hero_bot.arrays import RGBImage
+from eternal_hero_bot.core.arrays import RGBImage
 from tests.helpers import blank_screen
 
 

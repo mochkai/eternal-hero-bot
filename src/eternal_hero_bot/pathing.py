@@ -7,8 +7,8 @@ from collections import deque
 
 import numpy as np
 
-from eternal_hero_bot.arrays import Mask, Offset, Point
-from eternal_hero_bot.config import PATHING, SCREEN
+from eternal_hero_bot.core.arrays import Mask, Offset, Point
+from eternal_hero_bot.core.config import PATHING, SCREEN
 
 NEIGHBOURS: tuple[Point, ...] = (
     (1, 0),

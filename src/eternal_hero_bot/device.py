@@ -14,8 +14,8 @@ from typing import Protocol
 import numpy as np
 from PIL import Image
 
-from eternal_hero_bot.arrays import RGBImage
-from eternal_hero_bot.config import SCREEN, DeviceConfig, ScreenGeometry
+from eternal_hero_bot.core.arrays import RGBImage
+from eternal_hero_bot.core.config import SCREEN, DeviceConfig, ScreenGeometry
 
 
 class Device(Protocol):
