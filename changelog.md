@@ -39,6 +39,14 @@
   `WorldMemory`) into `action.navigation`; `plan()` remains available for detect. Refactored
   `Bot.step` to the perceive → navigator → controller wiring while preserving gather parity.
   Added unit tests for perceiver, controller, and navigator.
+- Step 5 of the architecture refactor (§11): added the skill framework (`skills/` with the
+  `Skill` protocol, `SkillContext`, `StepResult`/`SkillStatus` in `core/outcomes.py`, the
+  `@register` decorator and `build_skills(config)`), ported the gather loop into the pure
+  `GatherSkill` and the death flow into the `ReviveSkill`, and added the `Runtime` main loop
+  with a minimal fixed brain (`revive-on-death` / `gather`). The `Bot` class was deleted and
+  `ehbot run` now drives the runtime through perception, brain, skill and action. Golden
+  device-call traces still pass through the runtime; ported bot tests and new lifecycle tests
+  cover timeout, exception → FAILED and disable after N consecutive failures.
 
 ## 0.2.0 - 2026-11-24
 

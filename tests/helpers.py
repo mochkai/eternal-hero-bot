@@ -52,3 +52,46 @@ def blank_screen() -> RGBImage:
     r = SCREEN.mm_r
     paint(img, -r, -r, 2 * r, 2 * r, COLOURS.ground_rgb)
     return img
+
+
+class FakeDevice:
+    """A :class:`~eternal_hero_bot.device.base.Device` serving a fixed screen, recording input."""
+
+    def __init__(self, img: RGBImage) -> None:
+        """Create the fake.
+
+        Args:
+            img: Screen returned by every :meth:`screenshot`.
+        """
+        self.img = img
+        self.taps: list[tuple[int, int]] = []
+        self.swipes: list[tuple[int, int, int, int, int]] = []
+
+    def screenshot(self) -> RGBImage:
+        """Return the fixed screen.
+
+        Returns:
+            A copy of the screen.
+        """
+        return self.img.copy()
+
+    def tap(self, x: int, y: int) -> None:
+        """Record a tap.
+
+        Args:
+            x: Screen x coordinate.
+            y: Screen y coordinate.
+        """
+        self.taps.append((x, y))
+
+    def swipe(self, x1: int, y1: int, x2: int, y2: int, ms: int) -> None:
+        """Record a swipe.
+
+        Args:
+            x1: Start x.
+            y1: Start y.
+            x2: End x.
+            y2: End y.
+            ms: Duration.
+        """
+        self.swipes.append((x1, y1, x2, y2, ms))

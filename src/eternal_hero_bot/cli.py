@@ -7,10 +7,12 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
-from eternal_hero_bot.bot import Bot, plan
+from eternal_hero_bot.action.navigation import plan
 from eternal_hero_bot.debug import render_detect
 from eternal_hero_bot.device.adb import AdbDevice
 from eternal_hero_bot.device.base import Device
+from eternal_hero_bot.runtime import FixedBrain, Runtime
+from eternal_hero_bot.skills import build_skills
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +81,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "detect":
         detect(device, args.out)
     else:
+        runtime = Runtime(device, brain=FixedBrain(), skills=build_skills({}))
         try:
-            Bot(device).run(args.minutes)
+            runtime.run(args.minutes)
         except KeyboardInterrupt:
             logger.info("stopped")
     return 0

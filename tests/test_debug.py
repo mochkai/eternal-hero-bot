@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from eternal_hero_bot.bot import plan
+from eternal_hero_bot.action.navigation import plan
 from eternal_hero_bot.core.arrays import RGBImage
 from eternal_hero_bot.core.config import SCREEN
 from eternal_hero_bot.debug import SCALE, render_detect

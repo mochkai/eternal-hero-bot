@@ -288,7 +288,7 @@ class FakeWorld:
 
 
 GOLDEN_TICKS = 80
-"""Number of `Bot.step` ticks per golden scenario."""
+"""Number of `Runtime` ticks per golden scenario."""
 
 SCENARIOS: tuple[str, ...] = ("open_field", "invisible_wall", "death")
 """Golden scenario names; golden files are `tests/golden/gather_<name>.json`."""
@@ -317,18 +317,18 @@ def scenario(name: str, seed: int = 0) -> FakeWorld:
 
 
 def run_scenario(world: FakeWorld, ticks: int = GOLDEN_TICKS) -> list[TraceEvent]:
-    """Run the current `Bot` on `world` for `ticks` steps and return the trace.
+    """Run the runtime on `world` for `ticks` steps and return the trace.
 
     Args:
         world: The fake device world.
-        ticks: Number of `Bot.step` calls.
+        ticks: Number of `Runtime` ticks.
 
     Returns:
         The recorded event list (`tap`/`swipe`/`sleep`, in order).
     """
-    from eternal_hero_bot.bot import Bot
+    from eternal_hero_bot.runtime import FixedBrain, Runtime
 
-    bot = Bot(world, clock=world.clock, sleep=world.sleep)
+    runtime = Runtime(world, brain=FixedBrain(), clock=world.clock, sleep=world.sleep)
     for _ in range(ticks):
-        bot.step()
+        runtime.tick()
     return list(world.trace)
