@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.png
+!src/eternal_hero_bot/assets/**/*.png
 *.log
 .mypy_cache/
 .ruff_cache/
@@ -9,3 +10,4 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+assets/raw/

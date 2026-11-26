@@ -6,6 +6,12 @@
 - Architecture refactor spec (`docs/specs/architecture-refactor.md`): skills system, rule-based brain,
   perception/decision/action/device layers, reference image library, and recording hook. Spec only;
   no behaviour change yet.
+- Step 1 of the architecture refactor (§11): `tests/sim.py` adds `FakeWorld`, a seeded fake
+  `Device` rendering hero-centred minimap frames from a synthetic world (ground, walls, handle-coloured
+  nodes, invisible-wall cells, injected death ticks) with a fake clock and sleep; `swipe` from the
+  joystick moves the hero. Golden device-call traces recorded from current `Bot` in
+  `tests/golden/gather_*.json`, asserted by `tests/test_golden.py`. `.gitignore`: add
+  `!src/eternal_hero_bot/assets/**/*.png` and ignore `assets/raw/`.
 
 ## 0.2.0 - 2026-11-24
 
