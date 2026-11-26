@@ -54,6 +54,18 @@ BLOCKED_STAMP_DEPTH: tuple[int, ...] = (3, 4, 5)
 """Distances ahead of the hero (crop pixels) stamped as wall after a blocked push."""
 BLOCKED_STAMP_HALF_WIDTH = 8
 """Half-width, across the heading, of the wall stamped after a blocked push."""
+BLOCKED_WALL_SECONDS = 60
+"""How long a wall learned from a single blocked push is remembered.
+
+Shorter than ``StuckConfig.block_seconds`` because one slow push (combat, a swipe hitch,
+minimap lag) can be a false alarm, and a false wall must not seal a corridor for long.
+"""
+BLOCKED_SKIP_COUNT = 20
+"""Blocked pushes toward one node area before that area is skipped (unreachable)."""
+BLOCKED_STALE_S = 2.0
+"""Slack past a push's own duration after which it is too old to judge."""
+ARROW_RING_PX = 3
+"""Pixels beyond the arrow radius never remembered as wall (the arrow's dilated edge)."""
 PARTIAL_MIN_GAIN_PX = 3.0
 """A partial path must end at least this much closer to the target than the hero is."""
 
@@ -225,17 +237,20 @@ class WorldMemory:
         walls: World cell -> expiry time of a learned invisible wall.
         skips: ``(world x, world y, expiry)`` of skipped node areas.
         detours: Coarse target area -> number of blocked detours toward it.
+        blocks: Coarse target area -> number of single blocked pushes toward it.
     """
 
     walls: dict[Point, float] = field(default_factory=dict)
     skips: list[tuple[float, float, float]] = field(default_factory=list)
     detours: dict[Point, int] = field(default_factory=dict)
+    blocks: dict[Point, int] = field(default_factory=dict)
 
     def clear(self) -> None:
         """Forget everything (after death the map position is meaningless)."""
         self.walls.clear()
         self.skips.clear()
         self.detours.clear()
+        self.blocks.clear()
 
     def expire(self, now: float) -> None:
         """Drop walls and skips whose expiry has passed.
@@ -278,6 +293,27 @@ class WorldMemory:
         return [(sx - px, sy - py) for sx, sy, _ in self.skips]
 
 
+@dataclass(frozen=True)
+class _Push:
+    """A path-following push, remembered to judge on the next frame whether it was blocked.
+
+    Attributes:
+        start: Hero world position when the push was planned.
+        ux: Unit heading x.
+        uy: Unit heading y.
+        expected: Distance in minimap pixels the push should cover in the open.
+        deadline: Time after which the push is too old to judge.
+        target: World position of the node the push heads for.
+    """
+
+    start: FloatArray
+    ux: float
+    uy: float
+    expected: float
+    deadline: float
+    target: tuple[float, float]
+
+
 class Navigator:
     """Movement policy extracted from Bot: stuck/fallback/explore/world memory.
 
@@ -304,12 +340,14 @@ class Navigator:
         self.stuck = stuck
         self.memory = WorldMemory()
         self.hist: list[FloatArray] = []
-        self._last_push: tuple[FloatArray, float, float, float] | None = None
+        self._last_push: _Push | None = None
         self._blocked_streak = 0
         self._prev_walk: tuple[Mask, FloatArray] | None = None
         n, pr = screen.mm_size, screen.player_r
         yy, xx = np.mgrid[0:n, 0:n]
-        self._arrow: Mask = (xx - screen.mm_r) ** 2 + (yy - screen.mm_r) ** 2 < pr**2
+        d2 = (xx - screen.mm_r) ** 2 + (yy - screen.mm_r) ** 2
+        self._arrow: Mask = d2 < pr**2
+        self._hidden: Mask = d2 < (pr + pathing.wall_margin + ARROW_RING_PX) ** 2
 
     def reset(self) -> None:
         """Clear world memory, the last push and the remembered mask. Stuck history is kept."""
@@ -326,6 +364,11 @@ class Navigator:
         straight into them. The previous (already filled) mask, shifted by the hero's
         movement, still shows what lies under the arrow now.
 
+        The arrow's own edge can read as a thin wall ring just outside the disc, so the
+        remembered mask never takes the arrow or that ring from the current frame: they
+        keep the remembered value (unknown = walkable). Otherwise the ring on the leading
+        side would be carried forward as a fake wall right ahead of the hero.
+
         Args:
             walk: Walkable mask of this frame (crop pixels).
             pos: Hero world position this frame.
@@ -335,19 +378,21 @@ class Navigator:
         """
         prev, self._prev_walk = self._prev_walk, None
         out = walk
+        shifted = np.ones_like(walk)
         if prev is not None:
             prev_walk, prev_pos = prev
             sx, sy = (round(float(v)) for v in pos - prev_pos)
             n = walk.shape[0]
             if math.hypot(sx, sy) <= self.stuck.max_step_px:
                 # Pixel (x, y) now was pixel (x + sx, y + sy) last frame; unseen = walkable
-                shifted = np.ones_like(walk)
                 ys, ye = max(0, -sy), min(n, n - sy)
                 xs, xe = max(0, -sx), min(n, n - sx)
                 shifted[ys:ye, xs:xe] = prev_walk[ys + sy : ye + sy, xs + sx : xe + sx]
                 out = walk.copy()
                 out[self._arrow] = shifted[self._arrow]
-        self._prev_walk = (out.copy(), pos.copy())
+        stored = out.copy()
+        stored[self._hidden] = shifted[self._hidden]
+        self._prev_walk = (stored, pos.copy())
         return out
 
     def step_toward(self, view: MinimapView, targets: list[Offset], now: float) -> Move | None:
@@ -411,7 +456,8 @@ class Navigator:
         # Around a corner, push only as far as the visible point so the next frame turns
         seg = min(len(path), lookahead) if aim == min(lookahead, len(path) - 1) else aim
         ms = int(min(MAX_PUSH_MS, max(MIN_PUSH_MS, seg / self.pathing.px_per_sec * 1000)))
-        self._remember_push(pos, dx, dy, ms)
+        tx, ty = nearest_node(nodes, *path[-1], centre=r)
+        self._remember_push(pos, dx, dy, ms, now, (tx + px, ty + py))
         logger.info(
             "pos (%+.0f,%+.0f) node (%+d,%+d) path %d -> step (%+d,%+d) %dms walls %d",
             px,
@@ -449,7 +495,15 @@ class Navigator:
         ang = best * math.pi / 4
         return Move(dx=math.cos(ang), dy=math.sin(ang), ms=EXPLORE_MS)
 
-    def _remember_push(self, pos: FloatArray, dx: float, dy: float, ms: int) -> None:
+    def _remember_push(
+        self,
+        pos: FloatArray,
+        dx: float,
+        dy: float,
+        ms: int,
+        now: float,
+        target: tuple[float, float],
+    ) -> None:
         """Record a path-following push so the next frame can tell if it was blocked.
 
         Args:
@@ -457,13 +511,25 @@ class Navigator:
             dx: Push direction x (any magnitude).
             dy: Push direction y (any magnitude).
             ms: Push duration in milliseconds.
+            now: Time the push was planned, in seconds.
+            target: World position of the node the push heads for.
         """
         length = math.hypot(dx, dy)
         if length == 0:
-            self._last_push = None  # standing on the node: nothing to judge
+            # Standing on the node: nothing to judge, and the area proved reachable
+            self._last_push = None
+            area = self.stuck.area_cell
+            self.memory.blocks.pop((int(target[0] // area), int(target[1] // area)), None)
             return
         expected = ms / 1000 * self.pathing.px_per_sec
-        self._last_push = (pos.copy(), dx / length, dy / length, expected)
+        self._last_push = _Push(
+            start=pos.copy(),
+            ux=dx / length,
+            uy=dy / length,
+            expected=expected,
+            deadline=now + ms / 1000 + BLOCKED_STALE_S,
+            target=target,
+        )
 
     def _check_last_push(self, pos: FloatArray, now: float) -> None:
         """Learn a wall straight ahead as soon as one push fails to make progress.
@@ -478,17 +544,35 @@ class Navigator:
             now: Current time in seconds.
         """
         last, self._last_push = self._last_push, None
-        if last is None:
-            return
-        start, ux, uy, expected = last
+        if last is None or now > last.deadline:
+            return  # nothing pushed, or so long ago (e.g. gather was pre-empted) it says nothing
+        ux, uy, expected = last.ux, last.uy, last.expected
         if expected < BLOCKED_MIN_EXPECTED_PX:
             return
-        progress = float((pos[0] - start[0]) * ux + (pos[1] - start[1]) * uy)
+        progress = float((pos[0] - last.start[0]) * ux + (pos[1] - last.start[1]) * uy)
         if progress >= BLOCKED_FRACTION * expected:
             self._blocked_streak = 0
             return
         self._blocked_streak += 1
-        expiry = now + self.stuck.block_seconds
+        mem = self.memory
+        area = self.stuck.area_cell
+        tx, ty = last.target
+        key = (int(tx // area), int(ty // area))
+        mem.blocks[key] = mem.blocks.get(key, 0) + 1
+        if mem.blocks[key] > BLOCKED_SKIP_COUNT:
+            # Blocked again and again on the way to this node: treat it as unreachable
+            logger.info(
+                "giving up on node at (%+.0f,%+.0f) after %d blocked pushes for %ds",
+                tx,
+                ty,
+                mem.blocks[key],
+                self.stuck.skip_seconds,
+            )
+            mem.skips.append((tx, ty, now + self.stuck.skip_seconds))
+            mem.blocks[key] = 0
+            self.hist.clear()
+            return
+        expiry = now + BLOCKED_WALL_SECONDS
         w = BLOCKED_STAMP_HALF_WIDTH
         hx, hy = float(pos[0]), float(pos[1])
         for d in BLOCKED_STAMP_DEPTH:

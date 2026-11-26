@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from eternal_hero_bot.action.navigation import bfs, nearest_node
-from eternal_hero_bot.core.config import PATHING, SCREEN
+from eternal_hero_bot.core.config import PATHING, SCREEN, STUCK
 
 R = SCREEN.mm_r
 N = 2 * R
@@ -127,17 +127,64 @@ def test_navigator_small_progress_not_judged_blocked() -> None:
     assert not nav.memory.walls
 
 
+def _arrow_frame(ring: bool = False) -> np.ndarray:
+    """Open walkable mask as vision reports it: the arrow disc is always walkable.
+
+    Args:
+        ring: Also draw the arrow's dilated edge as a 1px wall ring just outside the disc.
+
+    Returns:
+        A ``2R x 2R`` mask.
+    """
+    walk = np.ones((N, N), bool)
+    yy, xx = np.mgrid[0:N, 0:N]
+    d2 = (xx - R) ** 2 + (yy - R) ** 2
+    if ring:
+        walk[(d2 >= SCREEN.player_r**2) & (d2 < (SCREEN.player_r + 1) ** 2)] = False
+    return walk
+
+
 def test_navigator_fills_arrow_disc_from_previous_frame() -> None:
     """A wall seen last frame stays known once the hero arrow covers it."""
     nav = Navigator()
-    walk = np.ones((N, N), bool)
-    walk[:, R + 14 : R + 16] = False  # wall 14px east, outside the 11px arrow
+    walk = _arrow_frame()
+    walk[:, R + 17 : R + 19] = False  # wall 17px east, well outside the arrow
     nav._fill_hidden(walk, np.array([0.0, 0.0]))
-    # Next frame: hero moved 6px east; the wall is 8px away, hidden under the arrow
-    walk2 = np.ones((N, N), bool)
-    out = nav._fill_hidden(walk2, np.array([6.0, 0.0]))
+    # Next frame: hero moved 9px east; the wall is 8px away, hidden under the arrow
+    out = nav._fill_hidden(_arrow_frame(), np.array([9.0, 0.0]))
     assert not out[R, R + 8]
     assert out[R, R + 2]  # open ground under the arrow stays walkable
+
+
+def test_navigator_arrow_edge_not_remembered_as_wall() -> None:
+    """The arrow's own edge ring is not carried forward as a fake wall ahead of the hero."""
+    nav = Navigator()
+    out = None
+    for k in range(5):
+        out = nav._fill_hidden(_arrow_frame(ring=True), np.array([6.0 * k, 0.0]))
+    assert out is not None
+    yy, xx = np.mgrid[0:N, 0:N]
+    arrow = (xx - R) ** 2 + (yy - R) ** 2 < SCREEN.player_r**2
+    assert out[arrow].all()
+
+
+def test_navigator_single_block_wall_expires_sooner() -> None:
+    """Walls from one blocked push expire well before confirmed (stuck) walls."""
+    nav = Navigator()
+    targets = [(50.0, 0.0)]
+    nav.step_toward(_view(), targets, now=1000.0)
+    nav.step_toward(_view(), targets, now=1001.0)
+    assert nav.memory.walls
+    assert max(nav.memory.walls.values()) < 1001.0 + STUCK.block_seconds
+
+
+def test_navigator_stale_push_not_judged() -> None:
+    """A push from long ago (gather pre-empted meanwhile) does not learn a wall."""
+    nav = Navigator()
+    targets = [(50.0, 0.0)]
+    nav.step_toward(_view(), targets, now=1000.0)
+    nav.step_toward(_view(), targets, now=1100.0)
+    assert not nav.memory.walls
 
 
 def test_navigator_reset_clears_push_and_mask_memory() -> None:

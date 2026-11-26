@@ -95,7 +95,8 @@ def test_stuck_learns_wall_ahead() -> None:
     assert rt.memory.walls  # the first push went nowhere: wall learned straight away
     for _ in range(6):
         rt.tick()
-    assert len(dev.swipes) < 8  # net-movement stuck handling still replans without pushing
+    # Back-to-back blocks fall through to net-movement stuck handling (a counted detour)
+    assert sum(rt.memory.detours.values()) >= 1
 
 
 def test_history_recorded_even_without_path() -> None:
