@@ -1,4 +1,4 @@
-"""Device layer: the :class:`Device` protocol and the joystick helper.
+"""Device layer: the :class:`Device` protocol.
 
 The bot only talks to the device through the small :class:`Device` protocol, so
 tests can substitute a fake that serves synthetic screenshots.
@@ -6,11 +6,9 @@ tests can substitute a fake that serves synthetic screenshots.
 
 from __future__ import annotations
 
-import math
 from typing import Protocol
 
 from eternal_hero_bot.core.arrays import RGBImage
-from eternal_hero_bot.core.config import SCREEN, ScreenGeometry
 
 
 class Device(Protocol):
@@ -44,21 +42,3 @@ class Device(Protocol):
             ms: Duration in milliseconds.
         """
         ...
-
-
-def push_joystick(
-    device: Device, dx: float, dy: float, ms: int, screen: ScreenGeometry = SCREEN
-) -> None:
-    """Hold the virtual joystick in direction ``(dx, dy)`` for ``ms`` milliseconds.
-
-    Args:
-        device: Device to send the swipe to.
-        dx: Direction x component (any magnitude).
-        dy: Direction y component (any magnitude).
-        ms: Hold duration in milliseconds.
-        screen: Screen geometry holding the joystick position and push radius.
-    """
-    length = math.hypot(dx, dy) or 1
-    tx = screen.joy_x + dx / length * screen.joy_r
-    ty = screen.joy_y + dy / length * screen.joy_r
-    device.swipe(screen.joy_x, screen.joy_y, int(tx), int(ty), ms)

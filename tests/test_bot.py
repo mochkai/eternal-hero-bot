@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
+from eternal_hero_bot.action.controller import push_joystick
 from eternal_hero_bot.action.navigation import bfs
 from eternal_hero_bot.bot import Bot, WorldMemory
 from eternal_hero_bot.core.arrays import RGBImage
 from eternal_hero_bot.core.config import SCREEN, STUCK
-from eternal_hero_bot.device.base import push_joystick
 from eternal_hero_bot.perception.vision import find_nodes
 from tests.helpers import HANDLE_RGB, blank_screen, paint
 

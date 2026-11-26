@@ -30,6 +30,15 @@
   `tests/test_navigation.py`; no compatibility shims. `tests/test_layers.py` updated for the
   new packages (`device`, `perception`, `action`) and allows numpy/PIL where required by
   `AdbDevice`, `vision`, `tracker`, `navigation`.
+- Step 4 of the architecture refactor (§11): added `perception.frame.Frame` and
+  `perception.perceiver` (`Perceiver` Protocol, `DefaultPerceiver`) producing immutable
+  `GameState` snapshots (world/dead screen classification, tracker reset and `map_epoch`
+  bump on first dead frame, node objectives, read-only minimap walk). Added
+  `action.controller.Controller` executing `Action` values against a `Device` and moved
+  `push_joystick` to the action layer. Extracted `Navigator` (stuck/fallback/explore and
+  `WorldMemory`) into `action.navigation`; `plan()` remains available for detect. Refactored
+  `Bot.step` to the perceive → navigator → controller wiring while preserving gather parity.
+  Added unit tests for perceiver, controller, and navigator.
 
 ## 0.2.0 - 2026-11-24
 
