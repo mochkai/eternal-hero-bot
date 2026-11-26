@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- Per-step processing-time stats (#19): `Runtime.tick` times the `capture`, `perceive`,
+  `decide`, `skill` (planning/pathfinding) and `act` phases plus `total` with
+  `time.perf_counter` (injected clock untouched, golden traces unchanged). Each tick logs a
+  DEBUG line and every `timing_log_every` ticks (default 100) an INFO per-phase mean/max
+  summary, both with structured `extra` fields; the last tick's `StepTiming` is exposed as
+  `Runtime.last_timing`.
 - Architecture refactor spec (`docs/specs/architecture-refactor.md`): skills system, rule-based brain,
   perception/decision/action/device layers, reference image library, and recording hook. Spec only;
   no behaviour change yet.
