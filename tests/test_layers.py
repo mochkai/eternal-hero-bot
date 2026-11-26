@@ -164,8 +164,13 @@ def test_layer_packages_present() -> None:
     assert (SRC_ROOT / "action" / "navigation.py").is_file()
     # Step 5 (spec §11): skill framework, registry, gather/revive skills, runtime.
     assert (SRC_ROOT / "skills").is_dir()
-    for name in ("__init__.py", "base.py", "gather.py", "registry.py", "revive.py"):
+    for name in ("__init__.py", "base.py", "gather.py", "registry.py", "revive.py", "stubs.py"):
         assert (SRC_ROOT / "skills" / name).is_file(), name
+    # Step 6 (spec §11): RuleBrain, conditions, default config, stubs registered.
+    assert (SRC_ROOT / "brain").is_dir()
+    for name in ("__init__.py", "base.py", "conditions.py", "rules.py"):
+        assert (SRC_ROOT / "brain" / name).is_file(), name
+    assert (SRC_ROOT / "default_config.toml").is_file()
 
 
 def test_layer_boundaries() -> None:

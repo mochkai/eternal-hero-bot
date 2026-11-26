@@ -53,6 +53,12 @@
   `ehbot run` now drives the runtime through perception, brain, skill and action. Golden
   device-call traces still pass through the runtime; ported bot tests and new lifecycle tests
   cover timeout, exception → FAILED and disable after N consecutive failures.
+- Step 6 of the architecture refactor (§11): added the `brain/` package with the `Brain`/`BrainContext`
+  protocol, `RuleBrain` (priority-ordered rules, cooldown/failure cooldown, preemption, `force`,
+  `min_run_s`), and condition predicates with strict TOML parsing (unknown keys raise errors).
+  Added packaged `default_config.toml` and `ehbot run --config FILE`. Registered stub skills
+  `find_treasure`, `hunt`, `complete_altar`, `daily_tasks`, and `spend_resource` (`can_run=False`);
+  default config keeps stub rules safely skipped until implemented. Golden gather traces remain identical.
 
 ## 0.2.0 - 2026-11-24
 

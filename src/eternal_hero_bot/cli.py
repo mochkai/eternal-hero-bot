@@ -8,16 +8,18 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from eternal_hero_bot.action.navigation import plan
+from eternal_hero_bot.brain.rules import load_brain_config
 from eternal_hero_bot.debug import render_detect
 from eternal_hero_bot.device.adb import AdbDevice
 from eternal_hero_bot.device.base import Device
-from eternal_hero_bot.runtime import FixedBrain, Runtime
+from eternal_hero_bot.runtime import Runtime
 from eternal_hero_bot.skills import build_skills
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MINUTES = 20.0
 DEFAULT_DETECT_OUT = Path("detect.png")
+DEFAULT_CONFIG = Path(__file__).with_name("default_config.toml")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,6 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_MINUTES,
         help=f"how long to run (default {DEFAULT_MINUTES:g})",
+    )
+    run_p.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG,
+        help="brain/skill config TOML (default: packaged default_config.toml)",
     )
     det_p = sub.add_parser("detect", help="write an annotated minimap debug image")
     det_p.add_argument(
@@ -81,7 +89,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "detect":
         detect(device, args.out)
     else:
-        runtime = Runtime(device, brain=FixedBrain(), skills=build_skills({}))
+        cfg = load_brain_config(args.config)
+        runtime = Runtime(
+            device,
+            brain=cfg.brain,
+            skills=build_skills(cfg.skill_options),
+            max_consecutive_failures=cfg.max_consecutive_failures,
+        )
         try:
             runtime.run(args.minutes)
         except KeyboardInterrupt:

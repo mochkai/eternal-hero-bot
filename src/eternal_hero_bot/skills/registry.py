@@ -51,6 +51,8 @@ def build_skills(config: Mapping[str, Mapping[str, object]]) -> dict[str, Skill]
     Raises:
         ValueError: If ``config`` names an unknown skill.
     """
+    import eternal_hero_bot.skills.stubs  # noqa: F401
+
     for name in config:
         if name not in SKILLS:
             raise ValueError(f"unknown skill: {name!r}")

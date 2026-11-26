@@ -1,0 +1,93 @@
+# Eternal Hero bot default configuration.
+#
+# Brain rules are evaluated in order: the first rule whose `when` condition holds,
+# that is not on cooldown, and whose skill can_run on the current state wins.
+# If no rule matches, `brain.default` runs.
+#
+# Priorities are configurable by reordering rules. Example priority intent:
+#   revive > daily/resource management > combat/treasure > gather (default).
+# Stub skills (find_treasure, hunt, complete_altar, daily_tasks, spend_resource)
+# currently have can_run=False, so their rules are safely skipped until implemented.
+
+[brain]
+default = "gather"
+max_consecutive_failures = 3
+
+# Revive immediately on death. Forced preemption bypasses non-interruptible skills.
+[[brain.rules]]
+name = "revive-on-death"
+skill = "revive"
+force = true
+when = { screen = "dead" }
+
+# Daily tasks before routine resource gathering (stub until daily_tasks is implemented).
+# Adjust `s` to your server reset cadence; `since_last_run` is also true if never run.
+[[brain.rules]]
+name = "daily-tasks-after-reset"
+skill = "daily_tasks"
+cooldown_s = 3600
+when = { all = [
+  { screen = "world" },
+  { since_last_run = { skill = "daily_tasks", s = 21600 } },
+] }
+
+# Spend a resource when it reaches its cap (stub until spend_resource is implemented).
+# Duplicate this rule per resource, or use resource_frac_gte for a threshold below max.
+[[brain.rules]]
+name = "spend-gold-at-max"
+skill = "spend_resource"
+args = { resource = "gold" }
+cooldown_s = 300
+failure_cooldown_s = 900
+when = { resource_at_max = "gold" }
+
+# Example: spend at a configurable threshold instead of hard max.
+# [[brain.rules]]
+# name = "spend-gold-near-max"
+# skill = "spend_resource"
+# args = { resource = "gold" }
+# cooldown_s = 300
+# when = { resource_frac_gte = { name = "gold", frac = 0.95 } }
+
+# When labor is too low to gather efficiently, switch behavior (stub until hunt is implemented).
+# Labor < 10 means gathering yields nothing; configure the threshold/value as needed.
+[[brain.rules]]
+name = "hunt-when-labor-low"
+skill = "hunt"
+cooldown_s = 60
+when = { all = [
+  { screen = "world" },
+  { resource_lt = { name = "labor", value = 10 } },
+] }
+
+# Example: wait/idle when labor low instead of hunting (configure by rule choice).
+# [[brain.rules]]
+# name = "pause-when-labor-low"
+# skill = "gather"
+# when = { resource_lt = { name = "labor", value = 10 } }
+
+[skills.gather]
+timeout_s = 0  # 0 = unlimited
+
+[skills.revive]
+
+[skills.find_treasure]
+timeout_s = 120
+
+[skills.hunt]
+timeout_s = 120
+
+[skills.complete_altar]
+timeout_s = 120
+
+[skills.daily_tasks]
+timeout_s = 300
+
+[skills.spend_resource]
+timeout_s = 120
+# Per-resource max/cap and spend thresholds are read from perception/config when
+# resource reading is implemented. Example future shape:
+# [skills.spend_resource.resources.gold]
+# max = 500
+# spend_at = 500  # or spend_frac = 1.0
+# hud_red_at_cap = true
