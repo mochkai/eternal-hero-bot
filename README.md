@@ -36,7 +36,7 @@ Game setup the bot expects:
 - **Environment variables**
   - `EHBOT_ADB`: path to the adb executable (default: BlueStacks' bundled `HD-Adb.exe`)
   - `EHBOT_DEVICE`: adb device serial of the BlueStacks instance (default `emulator-5554`)
-- **Tuned constants** live in `src/eternal_hero_bot/config.py` as frozen dataclasses:
+- **Tuned constants** live in `src/eternal_hero_bot/core/config.py` as frozen dataclasses:
   `ScreenGeometry` (minimap and joystick positions), `Colours` (walkable palette),
   `PathingConfig` (lookahead, wall margin) and `StuckConfig` (stuck and skip timings).
   They were calibrated for 960x1080 portrait; changing them changes the bot's behaviour.
@@ -70,21 +70,25 @@ uv run pre-commit install  # run ruff and mypy automatically on commit
 
 ```
 src/eternal_hero_bot/
-  config.py    tuned constants as frozen dataclasses
-  device.py    adb wrapper for BlueStacks and the joystick helper
-  vision.py    minimap crop, walkable mask, node and death-dialog detection
-  pathing.py   breadth-first path search over the walkable mask
-  tracker.py   hero position tracking by phase correlation
-  bot.py       the gather loop: planning, wall learning, revive
-  debug.py     annotated detect.png rendering
-  cli.py       the ehbot command (run, detect)
-  arrays.py    shared numpy type aliases
-  __main__.py  enables python -m eternal_hero_bot
-tests/         pytest suite with synthetic screenshots
+  core/
+    arrays.py    shared numpy type aliases
+    config.py    tuned constants as frozen dataclasses
+    state.py     immutable game-state snapshots (perception output)
+    actions.py   action union skills emit; controller executes
+    geometry.py  Box and reference/frame scaling helpers
+  device.py      adb wrapper for BlueStacks and the joystick helper
+  vision.py      minimap crop, walkable mask, node and death-dialog detection
+  pathing.py     breadth-first path search over the walkable mask
+  tracker.py     hero position tracking by phase correlation
+  bot.py         the gather loop: planning, wall learning, revive
+  debug.py       annotated detect.png rendering
+  cli.py         the ehbot command (run, detect)
+  __main__.py    enables python -m eternal_hero_bot
+tests/           pytest suite with synthetic screenshots and golden traces
 ```
 
 ## Known limitations
 
 - Fishing spots are not detected (fish icons have no orange handle).
-- Changing minimap size or zoom requires recalibrating the geometry/colour values in `config.py`.
+- Changing minimap size or zoom requires recalibrating the geometry/colour values in `core/config.py`.
 - No count of successful gathers; watch the in-game log (bottom-left) to confirm.

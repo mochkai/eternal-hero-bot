@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from eternal_hero_bot.cli import build_parser
-from eternal_hero_bot.config import DeviceConfig
+from eternal_hero_bot.core.config import DeviceConfig
 
 
 def test_run_defaults() -> None:

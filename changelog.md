@@ -12,6 +12,13 @@
   joystick moves the hero. Golden device-call traces recorded from current `Bot` in
   `tests/golden/gather_*.json`, asserted by `tests/test_golden.py`. `.gitignore`: add
   `!src/eternal_hero_bot/assets/**/*.png` and ignore `assets/raw/`.
+- Step 2 of the architecture refactor (§11): created `eternal_hero_bot.core` with moved
+  `arrays.py` and `config.py` (tuned values unchanged), plus new `state.py` (`ScreenKind`,
+  `Objective`, `ResourceReading`, `Detection`, `MinimapView`, `GameState`), `actions.py`
+  (`Move`, `Tap`, `TapNamed`, `Swipe`, `Wait`, `Action`), and `geometry.py` (`Box` and
+  reference/frame scaling helpers). Updated imports across `src/` and `tests/`. Added
+  `tests/test_layers.py` to enforce the spec layer import allow-list with `ast` for packages
+  present at this step.
 
 ## 0.2.0 - 2026-11-24
 
