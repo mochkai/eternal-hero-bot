@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -10,7 +12,7 @@ from eternal_hero_bot.core.actions import Move
 from eternal_hero_bot.core.config import SCREEN, STUCK
 from eternal_hero_bot.core.outcomes import SkillStatus
 from eternal_hero_bot.perception.vision import find_nodes
-from eternal_hero_bot.runtime import FixedBrain, Runtime
+from eternal_hero_bot.runtime import PHASES, FixedBrain, Runtime, StepTiming
 from tests.helpers import HANDLE_RGB, FakeDevice, blank_screen, paint
 
 
@@ -179,3 +181,125 @@ def test_tick_exception_marks_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     fourth = rt.tick()
     assert fourth.status is SkillStatus.RUNNING
     assert fourth.actions == ()
+
+
+_LOGGER = "eternal_hero_bot.runtime"
+
+
+def _step_records(caplog: pytest.LogCaptureFixture) -> list[dict[str, object]]:
+    """Collect the structured per-step timing payloads from captured DEBUG records.
+
+    Args:
+        caplog: Pytest log capture fixture.
+
+    Returns:
+        The ``step_timing`` dicts, in emission order.
+    """
+    return [
+        r.__dict__["step_timing"]
+        for r in caplog.records
+        if r.levelno == logging.DEBUG and "step_timing" in r.__dict__
+    ]
+
+
+def _assert_timing_fields(payload: dict[str, object]) -> None:
+    """Assert every phase and the total are present as non-negative floats.
+
+    Args:
+        payload: A ``step_timing`` dict from a log record.
+    """
+    phases = payload["phases_ms"]
+    assert isinstance(phases, dict)
+    assert set(phases) == {*PHASES, "total"}
+    for value in phases.values():
+        assert isinstance(value, float)
+        assert value >= 0.0
+
+
+def test_tick_logs_step_timing(caplog: pytest.LogCaptureFixture) -> None:
+    """Every tick emits a DEBUG timing record with frame, skill, status and all phases."""
+    caplog.set_level(logging.DEBUG, logger=_LOGGER)
+    rt = _runtime(FakeDevice(blank_screen()))
+    rt.tick()
+    rt.tick()
+    payloads = _step_records(caplog)
+    assert [p["frame"] for p in payloads] == [0, 1]
+    for payload in payloads:
+        assert payload["skill"] == "gather"
+        assert payload["status"] == "running"
+        _assert_timing_fields(payload)
+    messages = [r.getMessage() for r in caplog.records if "step_timing" in r.__dict__]
+    for name in (*PHASES, "total"):
+        assert f"{name}=" in messages[0]
+    assert "frame=0" in messages[0]
+    assert "skill=gather" in messages[0]
+    assert isinstance(rt.last_timing, StepTiming)
+    assert rt.last_timing.frame == 1
+    assert rt.last_timing.total_ms >= max(rt.last_timing.phases_ms.values())
+
+
+def test_tick_logs_summary_every_n(caplog: pytest.LogCaptureFixture) -> None:
+    """An INFO summary with per-phase mean/max appears every ``timing_log_every`` ticks."""
+    caplog.set_level(logging.INFO, logger=_LOGGER)
+    rt = Runtime(
+        FakeDevice(blank_screen()),
+        brain=FixedBrain(),
+        clock=lambda: 1000.0,
+        sleep=lambda _s: None,
+        timing_log_every=2,
+    )
+
+    def summaries() -> list[dict[str, object]]:
+        """Return the structured summary payloads captured so far."""
+        return [
+            r.__dict__["step_timing_summary"]
+            for r in caplog.records
+            if r.levelno == logging.INFO and "step_timing_summary" in r.__dict__
+        ]
+
+    rt.tick()
+    assert summaries() == []
+    rt.tick()
+    (summary,) = summaries()
+    assert summary["steps"] == 2
+    for name in (*PHASES, "total"):
+        stats = summary[name]
+        assert isinstance(stats, dict)
+        assert isinstance(stats["mean"], float)
+        assert 0.0 <= stats["mean"] <= stats["max"]
+    rt.tick()
+    assert len(summaries()) == 1  # window was reset
+    rt.tick()
+    assert len(summaries()) == 2
+
+
+def test_early_return_tick_still_logs(caplog: pytest.LogCaptureFixture) -> None:
+    """Done and disabled-skill early returns still log timing, unreached phases as 0."""
+    caplog.set_level(logging.DEBUG, logger=_LOGGER)
+    rt = _runtime(_dead_device())
+    result = rt.tick()
+    assert result.status is SkillStatus.DONE
+    (payload,) = _step_records(caplog)
+    assert payload["skill"] == "revive"
+    assert payload["status"] == "done"
+    _assert_timing_fields(payload)
+
+    caplog.clear()
+    rt._disabled.add("revive")
+    result = rt.tick()
+    assert result.actions == ()
+    (payload,) = _step_records(caplog)
+    assert payload["frame"] == 1
+    assert payload["skill"] == "revive"
+    _assert_timing_fields(payload)
+    phases = payload["phases_ms"]
+    assert isinstance(phases, dict)
+    assert phases["act"] == 0.0
+    assert rt.last_timing is not None
+    assert rt.last_timing.phases_ms["skill"] == 0.0
+
+
+def test_timing_log_every_must_be_positive() -> None:
+    """A non-positive summary window is rejected."""
+    with pytest.raises(ValueError, match="timing_log_every"):
+        Runtime(FakeDevice(blank_screen()), brain=FixedBrain(), timing_log_every=0)
