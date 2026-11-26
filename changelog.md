@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- Architecture refactor spec (`docs/specs/architecture-refactor.md`): skills system, rule-based brain,
+  perception/decision/action/device layers, reference image library, and recording hook. Spec only;
+  no behaviour change yet.
+
 ## 0.2.0 - 2026-11-24
 
 ### Changed
