@@ -122,39 +122,49 @@ This keeps them unit-testable, makes every action recordable, and lets the contr
 ```python
 # core/state.py
 class ScreenKind(StrEnum):
-    WORLD = "world"      # minimap visible, hero controllable
-    DEAD = "dead"        # death dialog
+    WORLD = "world"  # minimap visible, hero controllable
+    DEAD = "dead"  # death dialog
     UNKNOWN = "unknown"  # anything else (popups, menus): future skills/close-popup handle it
+
 
 @dataclass(frozen=True)
 class Objective:
-    kind: str                    # "node" today; later "treasure", "monster", "altar"
-    dx: float; dy: float         # hero-relative minimap px (same convention as today)
-    size: int = 0                # detector-specific weight (node handle pixel count)
+    kind: str  # "node" today; later "treasure", "monster", "altar"
+    dx: float
+    dy: float  # hero-relative minimap px (same convention as today)
+    size: int = 0  # detector-specific weight (node handle pixel count)
+
 
 @dataclass(frozen=True)
 class ResourceReading:
     name: str
-    value: int | None            # None = unreadable this frame
-    max: int | None              # from "a/b" counters or static manifest max
+    value: int | None  # None = unreadable this frame
+    max: int | None  # from "a/b" counters or static manifest max
     confidence: float
+
     @property
-    def at_max(self) -> bool: ...    # value is not None and max is not None and value >= max
+    def at_max(self) -> bool: ...  # value is not None and max is not None and value >= max
+
 
 @dataclass(frozen=True)
 class Detection:
-    name: str; box: Box; score: float        # frame px
+    name: str
+    box: Box
+    score: float  # frame px
+
 
 @dataclass(frozen=True)
 class MinimapView:
-    walk: Mask                   # walkable_mask(..., wall_margin) read-only (writeable=False)
+    walk: Mask  # walkable_mask(..., wall_margin) read-only (writeable=False)
     hero_pos: tuple[float, float]  # Tracker.pos after this frame's update
+
 
 @dataclass(frozen=True)
 class GameState:
-    t: float; frame_index: int
+    t: float
+    frame_index: int
     screen: ScreenKind
-    map_epoch: int               # bumps when the tracker is reset (death/respawn)
+    map_epoch: int  # bumps when the tracker is reset (death/respawn)
     minimap: MinimapView | None  # None unless screen == WORLD
     objectives: tuple[Objective, ...]
     resources: Mapping[str, ResourceReading]
@@ -184,7 +194,7 @@ A retry policy is a follow-up.
 ```python
 class Perceiver(Protocol):
     def perceive(self, frame: Frame) -> GameState: ...
-    def reset(self) -> None: ...          # new tracker, epoch += 1
+    def reset(self) -> None: ...  # new tracker, epoch += 1
 ```
 
 `DefaultPerceiver(screen, pathing, stuck, assets: Assets | None, ocr: OCR | None)` does the following per frame:
@@ -203,8 +213,11 @@ class TemplateMatcher:
     def find(self, frame: Frame, name: str, *, region: str | None = None) -> list[Detection]: ...
     def best(self, frame: Frame, name: str) -> Detection | None: ...
 
+
 class OCR(Protocol):
-    def read(self, frame: Frame, region: str) -> OCRResult: ...    # OCRResult(text, value, max, confidence)
+    def read(
+        self, frame: Frame, region: str
+    ) -> OCRResult: ...  # OCRResult(text, value, max, confidence)
 ```
 
 ### 5.3 Decision (brain)
@@ -214,21 +227,25 @@ class OCR(Protocol):
 class Decision:
     skill: str
     args: Mapping[str, object]
-    rule: str                    # rule name, or "default"
-    force: bool = False          # preempt even a non-interruptible skill
+    rule: str  # rule name, or "default"
+    force: bool = False  # preempt even a non-interruptible skill
+
 
 @dataclass(frozen=True)
 class BrainContext:
     now: float
-    current: str | None                  # running skill name
+    current: str | None  # running skill name
     current_rule: str | None
     current_interruptible: bool
     can_run: Callable[[str, GameState], bool]
-    last_run: Mapping[str, float]        # skill -> last finish time (for conditions)
+    last_run: Mapping[str, float]  # skill -> last finish time (for conditions)
+
 
 class Brain(Protocol):
     def decide(self, state: GameState, ctx: BrainContext) -> Decision: ...
-    def notify(self, decision: Decision, outcome: SkillStatus, now: float) -> None: ...  # cooldown bookkeeping
+    def notify(
+        self, decision: Decision, outcome: SkillStatus, now: float
+    ) -> None: ...  # cooldown bookkeeping
 ```
 
 `RuleBrain` works like this:
@@ -249,7 +266,11 @@ The brain sits behind a Protocol, so an `ImitationBrain` (§9.3) can replace `Ru
 ```python
 # SkillStatus and StepResult live in core/outcomes.py (as does Decision), so brain and
 # recording can use them without importing skills.
-class SkillStatus(StrEnum): RUNNING = "running"; DONE = "done"; FAILED = "failed"
+class SkillStatus(StrEnum):
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
 
 @dataclass(frozen=True)
 class StepResult:
@@ -257,23 +278,28 @@ class StepResult:
     actions: tuple[Action, ...] = ()
     reason: str = ""
 
+
 @dataclass
-class SkillContext:              # shared services the runtime hands to skills
+class SkillContext:  # shared services the runtime hands to skills
     navigator: Navigator
     clock: Callable[[], float]
-    options: Mapping[str, object]        # [skills.<name>] table from config
+    options: Mapping[str, object]  # [skills.<name>] table from config
+
 
 class Skill(Protocol):
     name: ClassVar[str]
-    timeout_s: float | None              # wall-clock budget per activation (None = unlimited)
+    timeout_s: float | None  # wall-clock budget per activation (None = unlimited)
     max_steps: int | None
+
     @property
     def interruptible(self) -> bool: ...
     def can_run(self, state: GameState) -> bool: ...
     def start(self, state: GameState, ctx: SkillContext, args: Mapping[str, object]) -> None: ...
-    def is_done(self, state: GameState) -> bool: ...     # state-derived completion, checked before step
+    def is_done(
+        self, state: GameState
+    ) -> bool: ...  # state-derived completion, checked before step
     def step(self, state: GameState, ctx: SkillContext) -> StepResult: ...
-    def abort(self, reason: str) -> None: ...            # release state; must not emit actions
+    def abort(self, reason: str) -> None: ...  # release state; must not emit actions
 ```
 
 **Lifecycle (run by `Runtime`)**
@@ -308,9 +334,15 @@ Every stub has `can_run → False` and a docstring describing its intent, and ge
 
 ```python
 class Controller:
-    def __init__(self, device: Device, assets: Assets | None, screen: ScreenGeometry,
-                 sleep: Callable[[float], None]) -> None: ...
+    def __init__(
+        self,
+        device: Device,
+        assets: Assets | None,
+        screen: ScreenGeometry,
+        sleep: Callable[[float], None],
+    ) -> None: ...
     def execute(self, action: Action) -> None: ...
+
     # Move -> push_joystick (unchanged maths); Tap/Swipe -> device; TapNamed -> manifest
     # region centre scaled to the frame; Wait -> sleep
 ```
@@ -319,10 +351,13 @@ class Controller:
 
 ```python
 class Navigator:
-    memory: WorldMemory          # walls, skips, detours (moved unchanged)
-    hist: list[FloatArray]       # stuck history
-    def reset(self) -> None: ...                       # memory.clear(); hist kept (see §10 note)
-    def step_toward(self, view: MinimapView, targets: list[Offset], now: float) -> Action | None: ...
+    memory: WorldMemory  # walls, skips, detours (moved unchanged)
+    hist: list[FloatArray]  # stuck history
+
+    def reset(self) -> None: ...  # memory.clear(); hist kept (see §10 note)
+    def step_toward(
+        self, view: MinimapView, targets: list[Offset], now: float
+    ) -> Action | None: ...
     def explore(self, walk: Mask) -> Move: ...
 ```
 
@@ -531,9 +566,10 @@ The existing `ehbot detect` stays.
 class StepRecord:
     frame: Frame
     state: GameState
-    decision: Decision | None            # None in watch mode
-    result: StepResult | None            # actions actually executed
+    decision: Decision | None  # None in watch mode
+    result: StepResult | None  # actions actually executed
     source: Literal["bot", "human"]
+
 
 class Recorder(Protocol):
     def record(self, rec: StepRecord) -> None: ...
