@@ -7,10 +7,10 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Protocol
 
 from eternal_hero_bot.action.controller import Controller
 from eternal_hero_bot.action.navigation import Navigator, WorldMemory
+from eternal_hero_bot.brain.base import Brain, BrainContext
 from eternal_hero_bot.core.arrays import FloatArray
 from eternal_hero_bot.core.config import (
     PATHING,
@@ -32,58 +32,11 @@ from eternal_hero_bot.skills.registry import build_skills
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class BrainContext:
-    """Context the runtime hands to the brain on every tick.
-
-    Attributes:
-        now: Current time in seconds.
-        current: Running skill name, if any.
-        current_rule: Rule that started the running skill.
-        current_interruptible: Whether the running skill may be preempted.
-        can_run: Whether a skill may run on a given game state.
-        last_run: Skill name to last finish time (for cooldown conditions).
-    """
-
-    now: float
-    current: str | None
-    current_rule: str | None
-    current_interruptible: bool
-    can_run: Callable[[str, GameState], bool]
-    last_run: Mapping[str, float]
-
-
-class Brain(Protocol):
-    """Decides which skill runs on a game state."""
-
-    def decide(self, state: GameState, ctx: BrainContext) -> Decision:
-        """Decide the next skill for the current game state.
-
-        Args:
-            state: Current immutable game state.
-            ctx: Context for the current tick.
-
-        Returns:
-            The decision to run (possibly the running skill again).
-        """
-        ...
-
-    def notify(self, decision: Decision, outcome: SkillStatus, now: float) -> None:
-        """Record a finished or failed activation, e.g. for cooldown bookkeeping.
-
-        Args:
-            decision: The decision that produced the outcome.
-            outcome: Skill status the activation ended with.
-            now: Current time in seconds.
-        """
-        ...
-
-
 class FixedBrain:
-    """Minimal fixed brain for the step-5 runtime.
+    """Minimal fixed brain kept for backward compatibility.
 
-    Death is handled by a forced revive decision; every other frame gathers. The
-    priority-ordered :class:`RuleBrain` with conditions and cooldowns arrives in step 6.
+    Death is handled by a forced revive decision; every other frame gathers.
+    Prefer :class:`~eternal_hero_bot.brain.rules.RuleBrain` for configurable behavior.
     """
 
     last_decision: Decision | None = None
@@ -106,7 +59,7 @@ class FixedBrain:
         return Decision(skill="gather", args={}, rule="default")
 
     def notify(self, decision: Decision, outcome: SkillStatus, now: float) -> None:
-        """Record the finished activation; full cooldown bookkeeping arrives with the brain.
+        """Record the finished activation.
 
         Args:
             decision: The decision that produced the outcome.
@@ -513,13 +466,16 @@ class Runtime:
         Returns:
             Brain context with the running activation's state.
         """
+        last_run = getattr(self.brain, "last_run", self._last_run)
+        if not isinstance(last_run, dict):
+            last_run = self._last_run
         return BrainContext(
             now=self.clock(),
             current=self._current_name,
             current_rule=self._current_rule,
             current_interruptible=self._interruptible,
             can_run=self._can_run,
-            last_run=self._last_run,
+            last_run=last_run,
         )
 
     def _can_run(self, name: str, state: GameState) -> bool:
@@ -542,7 +498,12 @@ class Runtime:
             decision: The decision that produced the outcome.
             outcome: Skill status the activation ended with.
         """
-        self.brain.notify(decision, outcome, self.clock())
+        now = self.clock()
+        self._last_run[decision.skill] = now
+        brain_last_run = getattr(self.brain, "last_run", None)
+        if isinstance(brain_last_run, dict):
+            brain_last_run[decision.skill] = now
+        self.brain.notify(decision, outcome, now)
         self._current = None
         self._current_name = None
 

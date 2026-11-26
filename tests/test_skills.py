@@ -150,9 +150,17 @@ def test_revive_rejects_options() -> None:
 
 
 def test_build_skills_registers_gather_and_revive() -> None:
-    """The registry builds the registered gather and revive skills from defaults."""
+    """The registry builds all registered skills, including stubs, from defaults."""
     skills = build_skills({})
-    assert set(skills) == {"gather", "revive"}
+    assert {
+        "gather",
+        "revive",
+        "find_treasure",
+        "hunt",
+        "complete_altar",
+        "daily_tasks",
+        "spend_resource",
+    } <= set(skills)
     assert isinstance(skills["gather"], GatherSkill)
     assert isinstance(skills["revive"], ReviveSkill)
 

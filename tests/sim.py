@@ -326,9 +326,20 @@ def run_scenario(world: FakeWorld, ticks: int = GOLDEN_TICKS) -> list[TraceEvent
     Returns:
         The recorded event list (`tap`/`swipe`/`sleep`, in order).
     """
-    from eternal_hero_bot.runtime import FixedBrain, Runtime
+    from eternal_hero_bot.brain.rules import load_brain_config
+    from eternal_hero_bot.cli import DEFAULT_CONFIG
+    from eternal_hero_bot.runtime import Runtime
+    from eternal_hero_bot.skills import build_skills
 
-    runtime = Runtime(world, brain=FixedBrain(), clock=world.clock, sleep=world.sleep)
+    cfg = load_brain_config(DEFAULT_CONFIG)
+    runtime = Runtime(
+        world,
+        brain=cfg.brain,
+        skills=build_skills(cfg.skill_options),
+        max_consecutive_failures=cfg.max_consecutive_failures,
+        clock=world.clock,
+        sleep=world.sleep,
+    )
     for _ in range(ticks):
         runtime.tick()
     return list(world.trace)
