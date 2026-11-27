@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Changed
+- Gather navigation goes round walls and corrects course faster (#18). `Navigator` now:
+  remembers the ground hidden under the hero arrow from the previous frame (the vision layer
+  marks the arrow disc walkable, so walls next to the hero were invisible to planning and paths
+  ran straight into them); steers at the farthest path point in line of sight instead of a fixed
+  lookahead point that cut wall corners (unchanged in open ground); plans a partial BFS path to the
+  reachable cell nearest the node when no full route is visible, instead of driving straight at
+  the wall; and treats one push that covers under 35% of its expected distance as blocked,
+  stamping a 17px wall across the heading and replanning in the same frame (previously three
+  still frames plus a skipped frame). Single-push walls last 60s (confirmed stuck walls keep
+  300s), pushes older than their duration + 2s are not judged, and more than 20 blocked pushes
+  toward one node area skip it, so unreachable nodes are still dropped about as fast as before.
+  The arrow's edge ring is never remembered as wall. Net-movement stuck detection, detour
+  counting and area skipping remain the backstop for a hero that cannot move at all.
+- Golden traces `tests/golden/gather_*.json` re-recorded (`uv run python -m tests.sim`). The
+  open-field and death traces first diverge after the bot stands on a node, where the old code
+  aimed straight through walls remembered in world memory and the new code steers around them.
+  The invisible-wall trace now walks round the barrier and reaches the node.
+
 ### Added
 - Per-step processing-time stats (#19): `Runtime.tick` times the `capture`, `perceive`,
   `decide`, `skill` (planning/pathfinding) and `act` phases plus `total` with
@@ -9,6 +28,10 @@
   DEBUG line and every `timing_log_every` ticks (default 100) an INFO per-phase mean/max
   summary, both with structured `extra` fields; the last tick's `StepTiming` is exposed as
   `Runtime.last_timing`.
+- `tests/test_nav_scenarios.py` and new `FakeWorld` scenarios (`wall_detour`, `u_pocket`,
+  `wide_wall`) with `ticks_to_reach`. Visible-wall cases now take 11 / 10 / 13 ticks to reach the
+  node (24 / 27 / 29 before) and the long invisible wall 40 (never before). Over 12 open-field seeds
+  the bot reaches 32 nodes in 150 ticks (33 before; within sim tracker noise).
 - Architecture refactor spec (`docs/specs/architecture-refactor.md`): skills system, rule-based brain,
   perception/decision/action/device layers, reference image library, and recording hook. Spec only;
   no behaviour change yet.

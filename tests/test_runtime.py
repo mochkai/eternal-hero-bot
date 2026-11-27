@@ -86,15 +86,19 @@ def test_tick_explores_without_nodes() -> None:
 
 
 def test_stuck_learns_wall_ahead() -> None:
-    """A hero that never moves eventually gets a learned wall on its path."""
+    """A hero that never moves gets a learned wall after one push, then stuck replans."""
     img = blank_screen()
     paint(img, 50, -2, 4, 4, HANDLE_RGB)
     dev = FakeDevice(img)
     rt = _runtime(dev)
-    for _ in range(4):
+    rt.tick()
+    assert not rt.memory.walls
+    rt.tick()
+    assert rt.memory.walls  # the first push went nowhere: wall learned straight away
+    for _ in range(6):
         rt.tick()
-    assert rt.memory.walls
-    assert len(dev.swipes) == 3  # the stuck step replans instead of pushing
+    # Back-to-back blocks fall through to net-movement stuck handling (a counted detour)
+    assert sum(rt.memory.detours.values()) >= 1
 
 
 def test_history_recorded_even_without_path() -> None:

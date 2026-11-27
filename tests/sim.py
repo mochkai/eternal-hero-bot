@@ -272,6 +272,53 @@ class FakeWorld:
         return world
 
     @classmethod
+    def wall_detour(cls) -> FakeWorld:
+        """A visible wall between the hero and a node; the route goes round its end.
+
+        Returns:
+            A `FakeWorld` whose node sits 45px east behind an 81px-tall wall.
+        """
+        world = cls(world_size=256)
+        cx = cy = 128
+        world.hero = (cx, cy)
+        world.nodes = [(cx + 45, cy)]
+        world.add_wall_rect(cx + 18, cy - 40, 6, 81)
+        return world
+
+    @classmethod
+    def u_pocket(cls) -> FakeWorld:
+        """The hero starts inside a U-shaped wall that opens away from the node.
+
+        The node is east, the pocket's closed side faces east, so the hero has to
+        head west out of the pocket and loop round it.
+
+        Returns:
+            A `FakeWorld` for the U-pocket scenario.
+        """
+        world = cls(world_size=256)
+        cx = cy = 128
+        world.hero = (cx, cy)
+        world.nodes = [(cx + 50, cy)]
+        world.add_wall_rect(cx + 20, cy - 30, 5, 61)
+        world.add_wall_rect(cx - 5, cy - 30, 25, 5)
+        world.add_wall_rect(cx - 5, cy + 26, 25, 5)
+        return world
+
+    @classmethod
+    def wide_wall(cls) -> FakeWorld:
+        """A long horizontal wall between the hero (north) and a node (south).
+
+        Returns:
+            A `FakeWorld` whose shortest route goes round the wall's east end.
+        """
+        world = cls(world_size=256)
+        cx = cy = 128
+        world.hero = (cx, cy - 30)
+        world.nodes = [(cx, cy + 40)]
+        world.add_wall_rect(cx - 70, cy, 120, 6)
+        return world
+
+    @classmethod
     def death_mid_run(cls, seed: int = 0, *, death_tick: int = 30) -> FakeWorld:
         """An open field with nodes where a death frame is injected mid-run.
 
@@ -316,6 +363,28 @@ def scenario(name: str, seed: int = 0) -> FakeWorld:
     raise ValueError(f"unknown scenario {name!r}; expected one of {SCENARIOS}")
 
 
+def ticks_to_reach(world: FakeWorld, max_ticks: int, reach: float = PATHING.goal_r) -> int | None:
+    """Run the runtime until the hero is within ``reach`` of any node.
+
+    Args:
+        world: The fake device world.
+        max_ticks: Give up after this many `Runtime` ticks.
+        reach: Distance in world pixels that counts as having reached a node.
+
+    Returns:
+        The number of ticks it took, or None if no node was reached in time.
+    """
+    from eternal_hero_bot.runtime import FixedBrain, Runtime
+
+    runtime = Runtime(world, brain=FixedBrain(), clock=world.clock, sleep=world.sleep)
+    for tick in range(1, max_ticks + 1):
+        runtime.tick()
+        hx, hy = world.hero
+        if any(math.hypot(hx - nx, hy - ny) <= reach for nx, ny in world.nodes):
+            return tick
+    return None
+
+
 def run_scenario(world: FakeWorld, ticks: int = GOLDEN_TICKS) -> list[TraceEvent]:
     """Run the runtime on `world` for `ticks` steps and return the trace.
 
@@ -332,3 +401,28 @@ def run_scenario(world: FakeWorld, ticks: int = GOLDEN_TICKS) -> list[TraceEvent
     for _ in range(ticks):
         runtime.tick()
     return list(world.trace)
+
+
+def record_goldens(names: tuple[str, ...] = SCENARIOS, seed: int = 0) -> None:
+    """Re-record golden traces from the current code (after an intentional behaviour change).
+
+    Run as ``uv run python -m tests.sim``. Only do this when a trace change is
+    deliberate and explained in the changelog.
+
+    Args:
+        names: Scenarios to record.
+        seed: RNG seed stored in each fixture.
+    """
+    import json
+    from pathlib import Path
+
+    golden_dir = Path(__file__).parent / "golden"
+    for name in names:
+        events = run_scenario(scenario(name, seed), GOLDEN_TICKS)
+        payload = {"events": events, "scenario": name, "seed": seed, "ticks": GOLDEN_TICKS}
+        path = golden_dir / f"gather_{name}.json"
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+if __name__ == "__main__":
+    record_goldens()
